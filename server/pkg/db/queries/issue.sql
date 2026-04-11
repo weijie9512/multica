@@ -1,7 +1,10 @@
 -- name: ListIssues :many
+-- customize: wiki fields added so the sidecar can detect consult_wiki
+-- candidates in a single list call instead of N+1 fetches
 SELECT id, workspace_id, title, status, priority,
        assignee_type, assignee_id, creator_type, creator_id,
-       parent_issue_id, position, due_date, created_at, updated_at, number, project_id
+       parent_issue_id, position, due_date, created_at, updated_at, number, project_id,
+       consult_wiki, allow_wiki_writes, wiki_query_hint
 FROM issue
 WHERE workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
@@ -65,9 +68,11 @@ RETURNING *;
 DELETE FROM issue WHERE id = $1;
 
 -- name: ListOpenIssues :many
+-- customize: wiki fields added (same rationale as ListIssues)
 SELECT id, workspace_id, title, status, priority,
        assignee_type, assignee_id, creator_type, creator_id,
-       parent_issue_id, position, due_date, created_at, updated_at, number, project_id
+       parent_issue_id, position, due_date, created_at, updated_at, number, project_id,
+       consult_wiki, allow_wiki_writes, wiki_query_hint
 FROM issue
 WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')
