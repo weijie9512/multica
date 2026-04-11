@@ -38,6 +38,10 @@ type IssueResponse struct {
 	ProjectID          *string                 `json:"project_id"`
 	Position           float64                 `json:"position"`
 	DueDate            *string                 `json:"due_date"`
+	// customize: wiki metadata fields consumed by the sidecar
+	ConsultWiki        bool                    `json:"consult_wiki"`
+	AllowWikiWrites    bool                    `json:"allow_wiki_writes"`
+	WikiQueryHint      *string                 `json:"wiki_query_hint"`
 	CreatedAt          string                  `json:"created_at"`
 	UpdatedAt          string                  `json:"updated_at"`
 	Reactions          []IssueReactionResponse `json:"reactions,omitempty"`
@@ -47,24 +51,27 @@ type IssueResponse struct {
 func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 	identifier := issuePrefix + "-" + strconv.Itoa(int(i.Number))
 	return IssueResponse{
-		ID:            uuidToString(i.ID),
-		WorkspaceID:   uuidToString(i.WorkspaceID),
-		Number:        i.Number,
-		Identifier:    identifier,
-		Title:         i.Title,
-		Description:   textToPtr(i.Description),
-		Status:        i.Status,
-		Priority:      i.Priority,
-		AssigneeType:  textToPtr(i.AssigneeType),
-		AssigneeID:    uuidToPtr(i.AssigneeID),
-		CreatorType:   i.CreatorType,
-		CreatorID:     uuidToString(i.CreatorID),
-		ParentIssueID: uuidToPtr(i.ParentIssueID),
-		ProjectID:     uuidToPtr(i.ProjectID),
-		Position:      i.Position,
-		DueDate:       timestampToPtr(i.DueDate),
-		CreatedAt:     timestampToString(i.CreatedAt),
-		UpdatedAt:     timestampToString(i.UpdatedAt),
+		ID:              uuidToString(i.ID),
+		WorkspaceID:     uuidToString(i.WorkspaceID),
+		Number:          i.Number,
+		Identifier:      identifier,
+		Title:           i.Title,
+		Description:     textToPtr(i.Description),
+		Status:          i.Status,
+		Priority:        i.Priority,
+		AssigneeType:    textToPtr(i.AssigneeType),
+		AssigneeID:      uuidToPtr(i.AssigneeID),
+		CreatorType:     i.CreatorType,
+		CreatorID:       uuidToString(i.CreatorID),
+		ParentIssueID:   uuidToPtr(i.ParentIssueID),
+		ProjectID:       uuidToPtr(i.ProjectID),
+		Position:        i.Position,
+		DueDate:         timestampToPtr(i.DueDate),
+		ConsultWiki:     i.ConsultWiki,     // customize
+		AllowWikiWrites: i.AllowWikiWrites, // customize
+		WikiQueryHint:   textToPtr(i.WikiQueryHint), // customize
+		CreatedAt:       timestampToString(i.CreatedAt),
+		UpdatedAt:       timestampToString(i.UpdatedAt),
 	}
 }
 
@@ -731,6 +738,10 @@ type CreateIssueRequest struct {
 	ProjectID          *string  `json:"project_id"`
 	DueDate            *string  `json:"due_date"`
 	AttachmentIDs      []string `json:"attachment_ids,omitempty"`
+	// customize: wiki metadata fields
+	ConsultWiki        *bool    `json:"consult_wiki"`
+	AllowWikiWrites    *bool    `json:"allow_wiki_writes"`
+	WikiQueryHint      *string  `json:"wiki_query_hint"`
 }
 
 func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
@@ -823,6 +834,16 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	// Determine creator identity: agent (via X-Agent-ID header) or member.
 	creatorType, actualCreatorID := h.resolveActor(r, creatorID, workspaceID)
 
+	// customize: wiki metadata — explicit opt-in, default false, hint optional
+	consultWiki := false
+	if req.ConsultWiki != nil {
+		consultWiki = *req.ConsultWiki
+	}
+	allowWikiWrites := false
+	if req.AllowWikiWrites != nil {
+		allowWikiWrites = *req.AllowWikiWrites
+	}
+
 	issue, err := qtx.CreateIssue(r.Context(), db.CreateIssueParams{
 		WorkspaceID:        parseUUID(workspaceID),
 		Title:              req.Title,
@@ -838,6 +859,9 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		DueDate:            dueDate,
 		Number:             issueNumber,
 		ProjectID:          func() pgtype.UUID { if req.ProjectID != nil { return parseUUID(*req.ProjectID) }; return pgtype.UUID{} }(),
+		ConsultWiki:        consultWiki,          // customize
+		AllowWikiWrites:    allowWikiWrites,      // customize
+		WikiQueryHint:      ptrToText(req.WikiQueryHint), // customize
 	})
 	if err != nil {
 		slog.Warn("create issue failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
@@ -896,6 +920,10 @@ type UpdateIssueRequest struct {
 	DueDate            *string  `json:"due_date"`
 	ParentIssueID      *string  `json:"parent_issue_id"`
 	ProjectID          *string  `json:"project_id"`
+	// customize: wiki metadata fields
+	ConsultWiki        *bool    `json:"consult_wiki"`
+	AllowWikiWrites    *bool    `json:"allow_wiki_writes"`
+	WikiQueryHint      *string  `json:"wiki_query_hint"`
 }
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -932,6 +960,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		DueDate:       prevIssue.DueDate,
 		ParentIssueID: prevIssue.ParentIssueID,
 		ProjectID:     prevIssue.ProjectID,
+		// customize: preserve wiki fields when caller omits them
+		WikiQueryHint: prevIssue.WikiQueryHint,
 	}
 
 	// COALESCE fields — only set when explicitly provided
@@ -1016,6 +1046,20 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 			params.ProjectID = parseUUID(*req.ProjectID)
 		} else {
 			params.ProjectID = pgtype.UUID{Valid: false}
+		}
+	}
+	// customize: wiki metadata updates
+	if req.ConsultWiki != nil {
+		params.ConsultWiki = pgtype.Bool{Bool: *req.ConsultWiki, Valid: true}
+	}
+	if req.AllowWikiWrites != nil {
+		params.AllowWikiWrites = pgtype.Bool{Bool: *req.AllowWikiWrites, Valid: true}
+	}
+	if _, ok := rawFields["wiki_query_hint"]; ok {
+		if req.WikiQueryHint != nil && *req.WikiQueryHint != "" {
+			params.WikiQueryHint = pgtype.Text{String: *req.WikiQueryHint, Valid: true}
+		} else {
+			params.WikiQueryHint = pgtype.Text{Valid: false}
 		}
 	}
 

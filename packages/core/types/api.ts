@@ -14,6 +14,10 @@ export interface CreateIssueRequest {
   project_id?: string;
   due_date?: string;
   attachment_ids?: string[];
+  /** customize: wiki metadata */
+  consult_wiki?: boolean;
+  allow_wiki_writes?: boolean;
+  wiki_query_hint?: string;
 }
 
 export interface UpdateIssueRequest {
@@ -27,6 +31,10 @@ export interface UpdateIssueRequest {
   due_date?: string | null;
   parent_issue_id?: string | null;
   project_id?: string | null;
+  /** customize: wiki metadata */
+  consult_wiki?: boolean;
+  allow_wiki_writes?: boolean;
+  wiki_query_hint?: string | null;
 }
 
 export interface ListIssuesParams {

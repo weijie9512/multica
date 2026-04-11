@@ -73,6 +73,10 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   const [projectId, setProjectId] = useState<string | undefined>(
     (data?.project_id as string) || undefined,
   );
+  // customize: wiki metadata (not persisted to draft — ephemeral per-issue flags)
+  const [consultWiki, setConsultWiki] = useState(false);
+  const [allowWikiWrites, setAllowWikiWrites] = useState(false);
+  const [wikiQueryHint, setWikiQueryHint] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
 
   // File upload — collect attachment IDs so we can link them after issue creation.
@@ -112,6 +116,10 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
         parent_issue_id: (data?.parent_issue_id as string) || undefined,
         project_id: projectId,
+        // customize: wiki metadata
+        consult_wiki: consultWiki || undefined,
+        allow_wiki_writes: allowWikiWrites || undefined,
+        wiki_query_hint: wikiQueryHint.trim() || undefined,
       });
       clearDraft();
       onClose();
@@ -227,6 +235,35 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             debounceMs={500}
           />
           {descDragOver && <FileDropOverlay />}
+        </div>
+
+        {/* customize: Wiki metadata strip */}
+        <div className="flex items-center gap-3 px-5 py-2 shrink-0 border-t border-border/40 text-xs">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-muted-foreground hover:text-foreground">
+            <input
+              type="checkbox"
+              checked={consultWiki}
+              onChange={(e) => setConsultWiki(e.target.checked)}
+              className="accent-primary size-3.5 cursor-pointer"
+            />
+            <span>Consult wiki</span>
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-muted-foreground hover:text-foreground">
+            <input
+              type="checkbox"
+              checked={allowWikiWrites}
+              onChange={(e) => setAllowWikiWrites(e.target.checked)}
+              className="accent-primary size-3.5 cursor-pointer"
+            />
+            <span>Allow writes</span>
+          </label>
+          <input
+            type="text"
+            value={wikiQueryHint}
+            onChange={(e) => setWikiQueryHint(e.target.value)}
+            placeholder="Wiki query hint (optional)"
+            className="flex-1 min-w-0 bg-transparent outline-none placeholder:text-muted-foreground/50"
+          />
         </div>
 
         {/* Property toolbar */}

@@ -94,27 +94,32 @@ const createIssue = `-- name: CreateIssue :one
 INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
-    parent_issue_id, position, due_date, number, project_id
+    parent_issue_id, position, due_date, number, project_id,
+    consult_wiki, allow_wiki_writes, wiki_query_hint
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+    $15, $16, $17
+) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint
 `
 
 type CreateIssueParams struct {
-	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
-	Title         string             `json:"title"`
-	Description   pgtype.Text        `json:"description"`
-	Status        string             `json:"status"`
-	Priority      string             `json:"priority"`
-	AssigneeType  pgtype.Text        `json:"assignee_type"`
-	AssigneeID    pgtype.UUID        `json:"assignee_id"`
-	CreatorType   string             `json:"creator_type"`
-	CreatorID     pgtype.UUID        `json:"creator_id"`
-	ParentIssueID pgtype.UUID        `json:"parent_issue_id"`
-	Position      float64            `json:"position"`
-	DueDate       pgtype.Timestamptz `json:"due_date"`
-	Number        int32              `json:"number"`
-	ProjectID     pgtype.UUID        `json:"project_id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	Title           string             `json:"title"`
+	Description     pgtype.Text        `json:"description"`
+	Status          string             `json:"status"`
+	Priority        string             `json:"priority"`
+	AssigneeType    pgtype.Text        `json:"assignee_type"`
+	AssigneeID      pgtype.UUID        `json:"assignee_id"`
+	CreatorType     string             `json:"creator_type"`
+	CreatorID       pgtype.UUID        `json:"creator_id"`
+	ParentIssueID   pgtype.UUID        `json:"parent_issue_id"`
+	Position        float64            `json:"position"`
+	DueDate         pgtype.Timestamptz `json:"due_date"`
+	Number          int32              `json:"number"`
+	ProjectID       pgtype.UUID        `json:"project_id"`
+	ConsultWiki     bool               `json:"consult_wiki"`
+	AllowWikiWrites bool               `json:"allow_wiki_writes"`
+	WikiQueryHint   pgtype.Text        `json:"wiki_query_hint"`
 }
 
 func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue, error) {
@@ -133,6 +138,9 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 		arg.DueDate,
 		arg.Number,
 		arg.ProjectID,
+		arg.ConsultWiki,
+		arg.AllowWikiWrites,
+		arg.WikiQueryHint,
 	)
 	var i Issue
 	err := row.Scan(
@@ -155,6 +163,9 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 		&i.UpdatedAt,
 		&i.Number,
 		&i.ProjectID,
+		&i.ConsultWiki,
+		&i.AllowWikiWrites,
+		&i.WikiQueryHint,
 	)
 	return i, err
 }
@@ -169,7 +180,7 @@ func (q *Queries) DeleteIssue(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getIssue = `-- name: GetIssue :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint FROM issue
 WHERE id = $1
 `
 
@@ -196,12 +207,15 @@ func (q *Queries) GetIssue(ctx context.Context, id pgtype.UUID) (Issue, error) {
 		&i.UpdatedAt,
 		&i.Number,
 		&i.ProjectID,
+		&i.ConsultWiki,
+		&i.AllowWikiWrites,
+		&i.WikiQueryHint,
 	)
 	return i, err
 }
 
 const getIssueByNumber = `-- name: GetIssueByNumber :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint FROM issue
 WHERE workspace_id = $1 AND number = $2
 `
 
@@ -233,12 +247,15 @@ func (q *Queries) GetIssueByNumber(ctx context.Context, arg GetIssueByNumberPara
 		&i.UpdatedAt,
 		&i.Number,
 		&i.ProjectID,
+		&i.ConsultWiki,
+		&i.AllowWikiWrites,
+		&i.WikiQueryHint,
 	)
 	return i, err
 }
 
 const getIssueInWorkspace = `-- name: GetIssueInWorkspace :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint FROM issue
 WHERE id = $1 AND workspace_id = $2
 `
 
@@ -270,12 +287,15 @@ func (q *Queries) GetIssueInWorkspace(ctx context.Context, arg GetIssueInWorkspa
 		&i.UpdatedAt,
 		&i.Number,
 		&i.ProjectID,
+		&i.ConsultWiki,
+		&i.AllowWikiWrites,
+		&i.WikiQueryHint,
 	)
 	return i, err
 }
 
 const listChildIssues = `-- name: ListChildIssues :many
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint FROM issue
 WHERE parent_issue_id = $1
 ORDER BY position ASC, created_at DESC
 `
@@ -309,6 +329,9 @@ func (q *Queries) ListChildIssues(ctx context.Context, parentIssueID pgtype.UUID
 			&i.UpdatedAt,
 			&i.Number,
 			&i.ProjectID,
+			&i.ConsultWiki,
+			&i.AllowWikiWrites,
+			&i.WikiQueryHint,
 		); err != nil {
 			return nil, err
 		}
@@ -507,23 +530,29 @@ UPDATE issue SET
     due_date = $9,
     parent_issue_id = $10,
     project_id = $11,
+    consult_wiki = COALESCE($12, consult_wiki),
+    allow_wiki_writes = COALESCE($13, allow_wiki_writes),
+    wiki_query_hint = $14,
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint
 `
 
 type UpdateIssueParams struct {
-	ID            pgtype.UUID        `json:"id"`
-	Title         pgtype.Text        `json:"title"`
-	Description   pgtype.Text        `json:"description"`
-	Status        pgtype.Text        `json:"status"`
-	Priority      pgtype.Text        `json:"priority"`
-	AssigneeType  pgtype.Text        `json:"assignee_type"`
-	AssigneeID    pgtype.UUID        `json:"assignee_id"`
-	Position      pgtype.Float8      `json:"position"`
-	DueDate       pgtype.Timestamptz `json:"due_date"`
-	ParentIssueID pgtype.UUID        `json:"parent_issue_id"`
-	ProjectID     pgtype.UUID        `json:"project_id"`
+	ID              pgtype.UUID        `json:"id"`
+	Title           pgtype.Text        `json:"title"`
+	Description     pgtype.Text        `json:"description"`
+	Status          pgtype.Text        `json:"status"`
+	Priority        pgtype.Text        `json:"priority"`
+	AssigneeType    pgtype.Text        `json:"assignee_type"`
+	AssigneeID      pgtype.UUID        `json:"assignee_id"`
+	Position        pgtype.Float8      `json:"position"`
+	DueDate         pgtype.Timestamptz `json:"due_date"`
+	ParentIssueID   pgtype.UUID        `json:"parent_issue_id"`
+	ProjectID       pgtype.UUID        `json:"project_id"`
+	ConsultWiki     pgtype.Bool        `json:"consult_wiki"`
+	AllowWikiWrites pgtype.Bool        `json:"allow_wiki_writes"`
+	WikiQueryHint   pgtype.Text        `json:"wiki_query_hint"`
 }
 
 func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue, error) {
@@ -539,6 +568,9 @@ func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue
 		arg.DueDate,
 		arg.ParentIssueID,
 		arg.ProjectID,
+		arg.ConsultWiki,
+		arg.AllowWikiWrites,
+		arg.WikiQueryHint,
 	)
 	var i Issue
 	err := row.Scan(
@@ -561,6 +593,9 @@ func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue
 		&i.UpdatedAt,
 		&i.Number,
 		&i.ProjectID,
+		&i.ConsultWiki,
+		&i.AllowWikiWrites,
+		&i.WikiQueryHint,
 	)
 	return i, err
 }
@@ -570,7 +605,7 @@ UPDATE issue SET
     status = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint
 `
 
 type UpdateIssueStatusParams struct {
@@ -601,6 +636,9 @@ func (q *Queries) UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusPa
 		&i.UpdatedAt,
 		&i.Number,
 		&i.ProjectID,
+		&i.ConsultWiki,
+		&i.AllowWikiWrites,
+		&i.WikiQueryHint,
 	)
 	return i, err
 }

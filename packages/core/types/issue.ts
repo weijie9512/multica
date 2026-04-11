@@ -37,6 +37,10 @@ export interface Issue {
   project_id: string | null;
   position: number;
   due_date: string | null;
+  /** customize: wiki metadata — read by the sidecar to pre-fetch / write-back wiki context */
+  consult_wiki: boolean;
+  allow_wiki_writes: boolean;
+  wiki_query_hint: string | null;
   reactions?: IssueReaction[];
   created_at: string;
   updated_at: string;
