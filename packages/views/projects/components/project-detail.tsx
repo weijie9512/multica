@@ -217,6 +217,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const sidebarRef = usePanelRef();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // customize: per-project agent spawn cwd. Local draft committed on blur.
+  const [workingDirDraft, setWorkingDirDraft] = useState<string | null>(null);
+
   // Lead popover
   const [leadOpen, setLeadOpen] = useState(false);
   const [leadFilter, setLeadFilter] = useState("");
@@ -598,6 +601,36 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     onUpdate={(md) => handleUpdateField({ description: md || null })}
                     debounceMs={1500}
                   />
+                </div>
+              </div>
+
+              {/* customize: Working Directory (per-project agent spawn cwd) */}
+              <div>
+                <h3 className="text-xs font-medium mb-2 flex items-center gap-1">
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rotate-90" />
+                  Working Directory
+                </h3>
+                <div className="pl-2">
+                  <input
+                    type="text"
+                    key={projectId}
+                    value={workingDirDraft ?? project.working_dir ?? ""}
+                    onChange={(e) => setWorkingDirDraft(e.target.value)}
+                    onBlur={() => {
+                      if (workingDirDraft === null) return;
+                      const next = workingDirDraft.trim();
+                      const prev = project.working_dir ?? "";
+                      if (next !== prev) {
+                        handleUpdateField({ working_dir: next === "" ? null : next });
+                      }
+                      setWorkingDirDraft(null);
+                    }}
+                    placeholder="Host path — e.g. /Users/you/code/my-repo (leave blank for default isolated workdir)"
+                    className="w-full bg-transparent text-xs font-mono placeholder:text-muted-foreground/60 outline-none border-b border-border/40 focus:border-border pb-1"
+                  />
+                  <p className="text-[11px] text-muted-foreground/70 mt-1">
+                    When set, agents working on issues in this project spawn with this directory as their working directory.
+                  </p>
                 </div>
               </div>
             </div>

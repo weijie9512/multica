@@ -250,12 +250,21 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 
 	// Include workspace ID and repos so the daemon can set up worktrees.
 	if task.IssueID.Valid {
+		var projectWorkDir string // customize: per-project agent spawn cwd
 		if issue, err := h.Queries.GetIssue(r.Context(), task.IssueID); err == nil {
 			resp.WorkspaceID = uuidToString(issue.WorkspaceID)
 			if ws, err := h.Queries.GetWorkspace(r.Context(), issue.WorkspaceID); err == nil && ws.Repos != nil {
 				var repos []RepoData
 				if json.Unmarshal(ws.Repos, &repos) == nil && len(repos) > 0 {
 					resp.Repos = repos
+				}
+			}
+			// customize: if the issue belongs to a project with a working_dir,
+			// capture it — it will override PriorWorkDir below so every task
+			// on this project spawns inside the user's chosen directory.
+			if issue.ProjectID.Valid {
+				if project, err := h.Queries.GetProject(r.Context(), issue.ProjectID); err == nil && project.WorkingDir.Valid && project.WorkingDir.String != "" {
+					projectWorkDir = project.WorkingDir.String
 				}
 			}
 		}
@@ -270,6 +279,13 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 			if prior.WorkDir.Valid {
 				resp.PriorWorkDir = prior.WorkDir.String
 			}
+		}
+
+		// customize: project working_dir wins over prior session workdir.
+		// The daemon's execenv.Reuse() treats PriorWorkDir as the cwd for the
+		// agent spawn, so hijacking it here is sufficient — no daemon changes.
+		if projectWorkDir != "" {
+			resp.PriorWorkDir = projectWorkDir
 		}
 	}
 

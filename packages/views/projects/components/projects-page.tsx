@@ -149,6 +149,8 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  // customize: per-project agent spawn cwd
+  const [workingDir, setWorkingDir] = useState("");
 
   // Lead popover
   const [leadOpen, setLeadOpen] = useState(false);
@@ -175,6 +177,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         priority,
         lead_type: leadType,
         lead_id: leadId,
+        working_dir: workingDir.trim() || undefined, // customize
       });
       onOpenChange(false);
       setTitle("");
@@ -183,6 +186,7 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       setPriority("none");
       setLeadType(undefined);
       setLeadId(undefined);
+      setWorkingDir(""); // customize
       toast.success("Project created");
       router.push(`/projects/${project.id}`);
     } catch {
@@ -284,6 +288,17 @@ function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             defaultValue=""
             placeholder="Add description..."
             debounceMs={500}
+          />
+        </div>
+
+        {/* customize: Working directory (per-project agent spawn cwd) */}
+        <div className="px-5 py-2 shrink-0 border-t border-border/50">
+          <input
+            type="text"
+            value={workingDir}
+            onChange={(e) => setWorkingDir(e.target.value)}
+            placeholder="Working directory (optional) — e.g. /Users/you/code/my-repo"
+            className="w-full bg-transparent text-xs font-mono placeholder:text-muted-foreground/70 outline-none"
           />
         </div>
 

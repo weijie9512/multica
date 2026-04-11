@@ -12,6 +12,8 @@ export interface Project {
   priority: ProjectPriority;
   lead_type: "member" | "agent" | null;
   lead_id: string | null;
+  /** customize: per-project agent spawn cwd (host filesystem path) */
+  working_dir: string | null;
   created_at: string;
   updated_at: string;
   issue_count: number;
@@ -26,6 +28,8 @@ export interface CreateProjectRequest {
   priority?: ProjectPriority;
   lead_type?: "member" | "agent";
   lead_id?: string;
+  /** customize: per-project agent spawn cwd (host filesystem path) */
+  working_dir?: string;
 }
 
 export interface UpdateProjectRequest {
@@ -36,6 +40,8 @@ export interface UpdateProjectRequest {
   priority?: ProjectPriority;
   lead_type?: "member" | "agent" | null;
   lead_id?: string | null;
+  /** customize: per-project agent spawn cwd (host filesystem path) */
+  working_dir?: string | null;
 }
 
 export interface ListProjectsResponse {
