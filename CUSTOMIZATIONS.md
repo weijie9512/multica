@@ -122,13 +122,25 @@ See `../../memex/INSTRUCTION.md` for the skill body the user pastes into the Mul
 
 ---
 
-## 3. Memex integration hints in the agent's meta skill
+## 3. Memex integration hints in the agent's task prompt
 
-**Commit subject:** `customize: inject memex integration hints into agent runtime config`
+**Commit history:**
+- `customize: inject memex integration hints into agent runtime config` (original — rendered hints in `CLAUDE.md` via `buildMetaSkillContent`)
+- `customize: move memex hints from CLAUDE.md to task prompt` — moved the conditional section into `BuildPrompt` so hints are per-task and ephemeral, not persisted in a file that survives workdir reuse
 
-**Issue this solves:** Customization #2 added two boolean gates on the issue table (`consult_wiki`, `allow_wiki_writes`) that tell whether a task should use the launcher's memex knowledge service. After retiring the polling sidecar (launcher Phase 8), the only thing that can *act* on those gates is the agent itself via the `memex` skill. But the skill is workspace-wide — the agent needs a per-task signal to know whether to invoke it for *this* particular task. This customization wires the two flags through the daemon's task-claim path and into the `CLAUDE.md` / `AGENTS.md` meta skill the daemon writes into every working directory.
+**Issue this solves:** Customization #2 added two boolean gates on the issue table (`consult_wiki`, `allow_wiki_writes`) that tell whether a task should use the launcher's memex knowledge service. After retiring the polling sidecar (launcher Phase 8), the only thing that can *act* on those gates is the agent itself via the `memex` skill. But the skill is workspace-wide — the agent needs a per-task signal to know whether to invoke it for *this* particular task. This customization wires the two flags through the daemon's task-claim path and into the task prompt passed to `backend.Execute`.
 
-**Scope:** Thread two booleans from the `issue` row → claim response → daemon task → `TaskContextForEnv` → `buildMetaSkillContent`, which emits a conditional `## Memex integration` section. When both flags are false, the section is absent and the meta skill is byte-identical to vanilla Multica.
+**Scope:** Thread two booleans from the `issue` row → claim response → daemon task → `BuildPrompt`, which emits a conditional `## Memex integration` section in the prompt string. When both flags are false, the section is absent and the prompt is identical to vanilla Multica.
+
+### Why the prompt and not CLAUDE.md
+
+The original implementation rendered memex hints into `CLAUDE.md` / `AGENTS.md` via `buildMetaSkillContent`. This was wrong because:
+
+1. **Workdirs are reused** across tasks on the same `(agent, issue)` pair. A `CLAUDE.md` written for issue A (with `consult_wiki=true`) would persist and mislead the agent on issue B (with `consult_wiki=false`) if they share the same project working directory.
+2. **Different issues in the same project can have different flags.** The meta skill file is project-scoped; the flags are issue-scoped.
+3. **`CLAUDE.md` may already exist** in real project repos. Overwriting it clobbers the project's own instructions.
+
+The task prompt is ephemeral and per-task — the right place for per-issue state. The memex section is ~3 lines, so the prompt cost is negligible.
 
 ### Data flow
 
@@ -141,54 +153,48 @@ AgentTaskResponse.ConsultWiki / AllowWikiWrites   (server/internal/handler/agent
         ▼  JSON over /daemon/claim-task
 Task.ConsultWiki / AllowWikiWrites   (server/internal/daemon/types.go)
         │
-        ▼  runTask builds taskCtx
-TaskContextForEnv.ConsultWiki / AllowWikiWrites   (server/internal/daemon/execenv/execenv.go)
-        │
-        ▼  InjectRuntimeConfig → buildMetaSkillContent
-CLAUDE.md / AGENTS.md  "## Memex integration" section
+        ▼  BuildPrompt
+prompt string → backend.Execute   (ephemeral, per-task)
 ```
 
-Nothing else reads the two flags. Removing this customization leaves vanilla behavior intact.
+Nothing else reads the two flags on the daemon side. Removing this customization leaves vanilla behavior intact.
 
-### Files touched (7 + 1 test + docs)
+### Files currently carrying this customization
 
 | File | Change | Hand-edited? |
 |---|---|---|
-| `server/internal/handler/agent.go` | Add `ConsultWiki`, `AllowWikiWrites` to `AgentTaskResponse` | ✅ |
+| `server/internal/handler/agent.go` | `ConsultWiki`, `AllowWikiWrites` on `AgentTaskResponse` | ✅ |
 | `server/internal/handler/daemon.go` | Inside `ClaimTaskByRuntime`, populate the two fields from the fetched issue row | ✅ |
-| `server/internal/daemon/types.go` | Add the two bools to the daemon's `Task` struct | ✅ |
-| `server/internal/daemon/daemon.go` | Propagate from `task` → `TaskContextForEnv` in `runTask` | ✅ |
-| `server/internal/daemon/execenv/execenv.go` | Add the two bools to `TaskContextForEnv` | ✅ |
-| `server/internal/daemon/execenv/runtime_config.go` | New conditional `## Memex integration` section in `buildMetaSkillContent` | ✅ |
-| `server/internal/daemon/execenv/execenv_test.go` | `TestInjectRuntimeConfigMemexHints` with three subtests (both/consult/writes) + assertion on the existing no-skills test that the section is absent | ✅ |
+| `server/internal/daemon/types.go` | Two bools on the daemon's `Task` struct | ✅ |
+| `server/internal/daemon/prompt.go` | Conditional `## Memex integration` section in `BuildPrompt` | ✅ |
+| `server/internal/daemon/daemon_test.go` | `TestBuildPromptMemexHints` with four subtests (both/consult/writes/neither) | ✅ |
 | `CUSTOMIZATIONS.md` | This section | ✅ |
 
-**Hand-edited count: 8.** Under PROJECT.md's ~10-file cap. No sqlc regeneration required — this is purely daemon-side plumbing; the DB schema is untouched (the columns already exist from Customization #2).
+**Hand-edited count: 6.** Under PROJECT.md's ~10-file cap. No sqlc regeneration required — this is purely daemon-side plumbing; the DB schema is untouched (the columns already exist from Customization #2).
 
-### Why the meta skill and not the task prompt
-
-The task prompt is for content the agent must see; the meta skill is for environment context. Memex integration is environment context — it applies to every action the agent takes on this task, not to a specific turn. Putting it in the meta skill (which renders into `CLAUDE.md` at the top of the working dir) means it's visible whenever the agent reads its configuration, and it doesn't bloat the prompt. It also matches how skills themselves get surfaced: the existing `## Skills` section already lives in the meta skill, so a `## Memex integration` section right after it is the natural place.
+**Files no longer carrying this customization** (cleaned up in the move):
+- `server/internal/daemon/execenv/execenv.go` — `ConsultWiki`/`AllowWikiWrites` removed from `TaskContextForEnv`
+- `server/internal/daemon/execenv/runtime_config.go` — memex section removed from `buildMetaSkillContent`
+- `server/internal/daemon/execenv/execenv_test.go` — `TestInjectRuntimeConfigMemexHints` removed
+- `server/internal/daemon/daemon.go` — no longer propagates the flags to `TaskContextForEnv`
 
 ### Upstream conflict risk
 
-- `server/internal/daemon/execenv/runtime_config.go` — medium. `buildMetaSkillContent` is a stable function but upstream could refactor the section order or move it behind a template. `git rerere` should handle small renames.
-- `server/internal/daemon/execenv/execenv.go` (`TaskContextForEnv` struct) — low. Fields in structs rarely cause merge conflicts.
-- `server/internal/handler/daemon.go` (`ClaimTaskByRuntime`) — medium-high. Active area; any upstream change to the issue-fetch block in the same function is a likely collision point. The insertion is adjacent to the existing `projectWorkDir` hijack from Customization #1, so the two live or die together.
-- `server/internal/handler/agent.go` (`AgentTaskResponse` struct) — low to medium. Additive field; upstream is more likely to add its own fields than to rearrange mine.
+- `server/internal/daemon/prompt.go` — low. `BuildPrompt` is a small, stable function. The memex section appends at the end.
+- `server/internal/handler/daemon.go` (`ClaimTaskByRuntime`) — medium-high. Active area; the insertion is adjacent to the existing `projectWorkDir` hijack from Customization #1.
+- `server/internal/handler/agent.go` (`AgentTaskResponse` struct) — low to medium. Additive field.
 - `server/internal/daemon/types.go` — low. Infrequent churn.
-- `server/internal/daemon/daemon.go` (`runTask` task context construction) — medium. Upstream iterates on daemon runtime behavior; the `taskCtx := execenv.TaskContextForEnv{...}` block is a hot spot for adding new context.
-- `execenv_test.go` — low. Tests grow additively.
 
-### Smoke test plan (user-side verification when `make up` runs next)
+### Smoke test plan
 
 1. Create a new issue with `consult_wiki=true`, `allow_wiki_writes=true` via the create-issue UI.
 2. Assign to the Claude agent with the `memex` skill installed.
 3. Let the daemon spawn Claude Code.
-4. Inspect the spawned working dir's `CLAUDE.md` (under `~/multica_workspaces/<ws>/<task>/workdir/` or the project `working_dir` if set): the `## Memex integration` section should be present with both bullets.
-5. Create a second issue with neither flag set, assign, and verify `CLAUDE.md` has no such section.
-6. Create a third issue with only `consult_wiki=true` and verify only the consult bullet appears.
+4. Check daemon logs for the prompt content — the `## Memex integration` section with both bullets should appear.
+5. Create a second issue with neither flag set, assign, and verify no memex section in the prompt.
+6. Verify the workdir's `CLAUDE.md` does **not** contain a memex section (it should only have the standard meta skill content).
 
-The unit test `TestInjectRuntimeConfigMemexHints` covers all three shapes offline — this smoke test just verifies the end-to-end wiring.
+The unit test `TestBuildPromptMemexHints` covers all four shapes (both/consult/writes/neither) offline.
 
 ---
 

@@ -148,24 +148,6 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 		b.WriteString("\n")
 	}
 
-	// customize: per-task memex integration hints. Emitted only when the
-	// issue explicitly opts in via consult_wiki or allow_wiki_writes. The
-	// agent is expected to have the `memex` skill installed at the
-	// workspace level — this section tells it *when* to invoke it for
-	// this particular task. Without these hints the agent must leave
-	// memex alone (the skill itself says so).
-	if ctx.ConsultWiki || ctx.AllowWikiWrites {
-		b.WriteString("## Memex integration\n\n")
-		b.WriteString("This task has memex integration enabled. Read the `memex` skill for the HTTP API details, path conventions, and caveats; the bullets below tell you when to invoke it for *this* task.\n\n")
-		if ctx.ConsultWiki {
-			b.WriteString("- **consult_wiki is ENABLED** — before starting substantive work on this task, use the `memex` skill to query memex for prior context relevant to this issue. Treat results as background, not ground truth.\n")
-		}
-		if ctx.AllowWikiWrites {
-			b.WriteString("- **allow_wiki_writes is ENABLED** — when your work is complete and *before* you mark the task done, use the `memex` skill to save a summary of what you did so future tasks on this project can find it. Write once, skip on blocked/cancelled outcomes.\n")
-		}
-		b.WriteString("\n")
-	}
-
 	b.WriteString("## Mentions\n\n")
 	b.WriteString("When referencing issues or people in comments, use the mention format so they render as interactive links:\n\n")
 	b.WriteString("- **Issue**: `[MUL-123](mention://issue/<issue-id>)` — renders as a clickable link to the issue\n")

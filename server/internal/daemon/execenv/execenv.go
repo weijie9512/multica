@@ -34,12 +34,7 @@ type TaskContextForEnv struct {
 	AgentInstructions string // agent identity/persona instructions, injected into CLAUDE.md
 	AgentSkills       []SkillContextForEnv
 	Repos             []RepoContextForEnv // workspace repos available for checkout
-	ChatSessionID     string              // non-empty for chat tasks
-	// customize: memex integration flags read from the issue at claim time.
-	// When set, buildMetaSkillContent emits a per-task "Memex integration"
-	// section telling the agent to use the installed `memex` skill.
-	ConsultWiki     bool
-	AllowWikiWrites bool
+	ChatSessionID string // non-empty for chat tasks
 }
 
 // SkillContextForEnv represents a skill to be written into the execution environment.

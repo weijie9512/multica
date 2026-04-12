@@ -897,10 +897,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		AgentInstructions: instructions,
 		AgentSkills:       convertSkillsForEnv(skills),
 		Repos:             convertReposForEnv(task.Repos),
-		ChatSessionID:     task.ChatSessionID,
-		// customize: propagate memex integration gates into the meta skill.
-		ConsultWiki:     task.ConsultWiki,
-		AllowWikiWrites: task.AllowWikiWrites,
+		ChatSessionID: task.ChatSessionID,
 	}
 
 	// Try to reuse the workdir from a previous task on the same (agent, issue) pair.

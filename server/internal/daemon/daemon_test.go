@@ -66,6 +66,69 @@ func TestBuildPromptNoIssueDetails(t *testing.T) {
 	}
 }
 
+// customize: TestBuildPromptMemexHints verifies the per-task memex
+// integration hints are rendered in the prompt (not CLAUDE.md) when the
+// issue flags are set. The flags vary per issue so they must be in the
+// ephemeral prompt, not in a file that persists across workdir reuse.
+func TestBuildPromptMemexHints(t *testing.T) {
+	t.Parallel()
+
+	t.Run("both flags set renders both bullets", func(t *testing.T) {
+		t.Parallel()
+		prompt := BuildPrompt(Task{
+			IssueID:         "memex-both",
+			ConsultWiki:     true,
+			AllowWikiWrites: true,
+		})
+		for _, want := range []string{
+			"## Memex integration",
+			"consult_wiki is ENABLED",
+			"allow_wiki_writes is ENABLED",
+			"`memex` skill",
+		} {
+			if !strings.Contains(prompt, want) {
+				t.Errorf("prompt missing %q", want)
+			}
+		}
+	})
+
+	t.Run("consult only omits write bullet", func(t *testing.T) {
+		t.Parallel()
+		prompt := BuildPrompt(Task{
+			IssueID:     "memex-consult",
+			ConsultWiki: true,
+		})
+		if !strings.Contains(prompt, "consult_wiki is ENABLED") {
+			t.Error("should contain consult_wiki bullet")
+		}
+		if strings.Contains(prompt, "allow_wiki_writes is ENABLED") {
+			t.Error("should NOT contain allow_wiki_writes bullet when flag is false")
+		}
+	})
+
+	t.Run("writes only omits consult bullet", func(t *testing.T) {
+		t.Parallel()
+		prompt := BuildPrompt(Task{
+			IssueID:         "memex-writes",
+			AllowWikiWrites: true,
+		})
+		if strings.Contains(prompt, "consult_wiki is ENABLED") {
+			t.Error("should NOT contain consult_wiki bullet when flag is false")
+		}
+		if !strings.Contains(prompt, "allow_wiki_writes is ENABLED") {
+			t.Error("should contain allow_wiki_writes bullet")
+		}
+	})
+
+	t.Run("neither flag omits section entirely", func(t *testing.T) {
+		t.Parallel()
+		prompt := BuildPrompt(Task{IssueID: "memex-none"})
+		if strings.Contains(prompt, "## Memex integration") {
+			t.Error("should not have Memex integration section when neither flag is set")
+		}
+	})
+}
+
 func TestIsWorkspaceNotFoundError(t *testing.T) {
 	t.Parallel()
 
