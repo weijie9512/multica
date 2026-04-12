@@ -95,11 +95,11 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, position, due_date, number, project_id,
-    consult_wiki, allow_wiki_writes, wiki_query_hint
+    consult_wiki, allow_wiki_writes
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-    $15, $16, $17
-) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint
+    $15, $16
+) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes
 `
 
 type CreateIssueParams struct {
@@ -119,7 +119,6 @@ type CreateIssueParams struct {
 	ProjectID       pgtype.UUID        `json:"project_id"`
 	ConsultWiki     bool               `json:"consult_wiki"`
 	AllowWikiWrites bool               `json:"allow_wiki_writes"`
-	WikiQueryHint   pgtype.Text        `json:"wiki_query_hint"`
 }
 
 func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue, error) {
@@ -140,7 +139,6 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 		arg.ProjectID,
 		arg.ConsultWiki,
 		arg.AllowWikiWrites,
-		arg.WikiQueryHint,
 	)
 	var i Issue
 	err := row.Scan(
@@ -165,7 +163,6 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 		&i.ProjectID,
 		&i.ConsultWiki,
 		&i.AllowWikiWrites,
-		&i.WikiQueryHint,
 	)
 	return i, err
 }
@@ -180,7 +177,7 @@ func (q *Queries) DeleteIssue(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getIssue = `-- name: GetIssue :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes FROM issue
 WHERE id = $1
 `
 
@@ -209,13 +206,12 @@ func (q *Queries) GetIssue(ctx context.Context, id pgtype.UUID) (Issue, error) {
 		&i.ProjectID,
 		&i.ConsultWiki,
 		&i.AllowWikiWrites,
-		&i.WikiQueryHint,
 	)
 	return i, err
 }
 
 const getIssueByNumber = `-- name: GetIssueByNumber :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes FROM issue
 WHERE workspace_id = $1 AND number = $2
 `
 
@@ -249,13 +245,12 @@ func (q *Queries) GetIssueByNumber(ctx context.Context, arg GetIssueByNumberPara
 		&i.ProjectID,
 		&i.ConsultWiki,
 		&i.AllowWikiWrites,
-		&i.WikiQueryHint,
 	)
 	return i, err
 }
 
 const getIssueInWorkspace = `-- name: GetIssueInWorkspace :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes FROM issue
 WHERE id = $1 AND workspace_id = $2
 `
 
@@ -289,13 +284,12 @@ func (q *Queries) GetIssueInWorkspace(ctx context.Context, arg GetIssueInWorkspa
 		&i.ProjectID,
 		&i.ConsultWiki,
 		&i.AllowWikiWrites,
-		&i.WikiQueryHint,
 	)
 	return i, err
 }
 
 const listChildIssues = `-- name: ListChildIssues :many
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes FROM issue
 WHERE parent_issue_id = $1
 ORDER BY position ASC, created_at DESC
 `
@@ -331,7 +325,6 @@ func (q *Queries) ListChildIssues(ctx context.Context, parentIssueID pgtype.UUID
 			&i.ProjectID,
 			&i.ConsultWiki,
 			&i.AllowWikiWrites,
-			&i.WikiQueryHint,
 		); err != nil {
 			return nil, err
 		}
@@ -347,7 +340,7 @@ const listIssues = `-- name: ListIssues :many
 SELECT id, workspace_id, title, status, priority,
        assignee_type, assignee_id, creator_type, creator_id,
        parent_issue_id, position, due_date, created_at, updated_at, number, project_id,
-       consult_wiki, allow_wiki_writes, wiki_query_hint
+       consult_wiki, allow_wiki_writes
 FROM issue
 WHERE workspace_id = $1
   AND ($4::text IS NULL OR status = $4)
@@ -389,11 +382,11 @@ type ListIssuesRow struct {
 	ProjectID       pgtype.UUID        `json:"project_id"`
 	ConsultWiki     bool               `json:"consult_wiki"`
 	AllowWikiWrites bool               `json:"allow_wiki_writes"`
-	WikiQueryHint   pgtype.Text        `json:"wiki_query_hint"`
 }
 
-// customize: wiki fields added so the sidecar can detect consult_wiki
-// candidates in a single list call instead of N+1 fetches
+// customize: consult_wiki/allow_wiki_writes selected explicitly so the API
+// exposes them without an N+1 per-issue fetch. (Migration 042 dropped
+// wiki_query_hint; kept the two boolean gates.)
 func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListIssuesRow, error) {
 	rows, err := q.db.Query(ctx, listIssues,
 		arg.WorkspaceID,
@@ -431,7 +424,6 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 			&i.ProjectID,
 			&i.ConsultWiki,
 			&i.AllowWikiWrites,
-			&i.WikiQueryHint,
 		); err != nil {
 			return nil, err
 		}
@@ -447,7 +439,7 @@ const listOpenIssues = `-- name: ListOpenIssues :many
 SELECT id, workspace_id, title, status, priority,
        assignee_type, assignee_id, creator_type, creator_id,
        parent_issue_id, position, due_date, created_at, updated_at, number, project_id,
-       consult_wiki, allow_wiki_writes, wiki_query_hint
+       consult_wiki, allow_wiki_writes
 FROM issue
 WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')
@@ -485,10 +477,10 @@ type ListOpenIssuesRow struct {
 	ProjectID       pgtype.UUID        `json:"project_id"`
 	ConsultWiki     bool               `json:"consult_wiki"`
 	AllowWikiWrites bool               `json:"allow_wiki_writes"`
-	WikiQueryHint   pgtype.Text        `json:"wiki_query_hint"`
 }
 
-// customize: wiki fields added (same rationale as ListIssues)
+// customize: consult_wiki/allow_wiki_writes selected explicitly (same
+// rationale as ListIssues; wiki_query_hint dropped in migration 042).
 func (q *Queries) ListOpenIssues(ctx context.Context, arg ListOpenIssuesParams) ([]ListOpenIssuesRow, error) {
 	rows, err := q.db.Query(ctx, listOpenIssues,
 		arg.WorkspaceID,
@@ -523,7 +515,6 @@ func (q *Queries) ListOpenIssues(ctx context.Context, arg ListOpenIssuesParams) 
 			&i.ProjectID,
 			&i.ConsultWiki,
 			&i.AllowWikiWrites,
-			&i.WikiQueryHint,
 		); err != nil {
 			return nil, err
 		}
@@ -549,10 +540,9 @@ UPDATE issue SET
     project_id = $11,
     consult_wiki = COALESCE($12, consult_wiki),
     allow_wiki_writes = COALESCE($13, allow_wiki_writes),
-    wiki_query_hint = $14,
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes
 `
 
 type UpdateIssueParams struct {
@@ -569,7 +559,6 @@ type UpdateIssueParams struct {
 	ProjectID       pgtype.UUID        `json:"project_id"`
 	ConsultWiki     pgtype.Bool        `json:"consult_wiki"`
 	AllowWikiWrites pgtype.Bool        `json:"allow_wiki_writes"`
-	WikiQueryHint   pgtype.Text        `json:"wiki_query_hint"`
 }
 
 func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue, error) {
@@ -587,7 +576,6 @@ func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue
 		arg.ProjectID,
 		arg.ConsultWiki,
 		arg.AllowWikiWrites,
-		arg.WikiQueryHint,
 	)
 	var i Issue
 	err := row.Scan(
@@ -612,7 +600,6 @@ func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue
 		&i.ProjectID,
 		&i.ConsultWiki,
 		&i.AllowWikiWrites,
-		&i.WikiQueryHint,
 	)
 	return i, err
 }
@@ -622,7 +609,7 @@ UPDATE issue SET
     status = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes, wiki_query_hint
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, consult_wiki, allow_wiki_writes
 `
 
 type UpdateIssueStatusParams struct {
@@ -655,7 +642,6 @@ func (q *Queries) UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusPa
 		&i.ProjectID,
 		&i.ConsultWiki,
 		&i.AllowWikiWrites,
-		&i.WikiQueryHint,
 	)
 	return i, err
 }

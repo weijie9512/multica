@@ -1226,7 +1226,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 />
               </PropRow>
 
-              {/* customize: Wiki metadata */}
+              {/* customize: Wiki metadata gates — opt-in flags for the `memex` skill */}
               <PropRow label="Wiki">
                 <label className="flex items-center gap-1 cursor-pointer select-none text-muted-foreground hover:text-foreground">
                   <input
@@ -1246,21 +1246,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   />
                   <span>writes</span>
                 </label>
-              </PropRow>
-              <PropRow label="Hint">
-                <input
-                  type="text"
-                  defaultValue={issue.wiki_query_hint ?? ""}
-                  onBlur={(e) => {
-                    const next = e.target.value.trim();
-                    const prev = issue.wiki_query_hint ?? "";
-                    if (next !== prev) {
-                      handleUpdateField({ wiki_query_hint: next === "" ? null : next });
-                    }
-                  }}
-                  placeholder="wiki query hint (optional)"
-                  className="w-full bg-transparent outline-none placeholder:text-muted-foreground/50"
-                />
               </PropRow>
             </div>}
           </div>

@@ -54,59 +54,71 @@ Design doc: `../../PROJECT.md` §3 (Soft fork with upstream sync).
 
 ---
 
-## 2. Wiki metadata fields on issues
+## 2. Wiki metadata gates on issues
 
-**Commit subject:** `customize: add wiki metadata fields to issues`
-**Issue this solves:** The Phase 5 sidecar needs a way to know, per-issue, whether to pre-fetch wiki context before agent spawn, whether to write a post-task summary back to the wiki, and optionally what query to use instead of the issue title. Without these fields, the sidecar would have to apply global rules to every issue, which defeats the point of selective knowledge injection.
+**Commit history:**
+- `b41e0ad5 customize: add wiki metadata fields to issues` (2026-04-11) — original, added 3 columns + UI for the Phase 5 polling sidecar
+- `3a96beb6 customize: expose wiki fields in issue list responses` (2026-04-11) — enable Phase 5 sidecar to see the fields in list queries
+- **`<042 commit> customize: drop wiki_query_hint column`** (2026-04-12) — removed the hint field; see "Current state" below
 
-**Scope:** Three new columns on the `issue` table:
+**Issue this solves:** Agents should only consult or write to the memex knowledge base on issues the user explicitly opts into. Without per-issue gates, you'd either enrich every task (noisy, confusing) or none of them (defeats the purpose).
+
+### Current state (after migration 042)
+
+Two boolean columns on the `issue` table:
 
 | Column | Type | Default | Purpose |
 |---|---|---|---|
-| `consult_wiki` | `BOOLEAN NOT NULL` | `FALSE` | When true, the sidecar calls `llm-wiki /search` and posts the result as a comment on the issue before the agent starts work |
-| `allow_wiki_writes` | `BOOLEAN NOT NULL` | `FALSE` | When true, the sidecar calls `llm-wiki /entries` with the agent's final summary on task completion |
-| `wiki_query_hint` | `TEXT` | `NULL` | Optional free-form hint to bias the wiki search; falls back to the issue title when null or empty |
+| `consult_wiki` | `BOOLEAN NOT NULL` | `FALSE` | When true, the daemon's meta skill tells the agent to use the `memex` skill to pull prior context before starting work |
+| `allow_wiki_writes` | `BOOLEAN NOT NULL` | `FALSE` | When true, the daemon's meta skill tells the agent to use the `memex` skill to save a summary before marking the task done |
 
-All defaults keep existing rows backward-compatible — the sidecar is opt-in per issue.
+Both opt-in. Both surfaced to the agent via the runtime config meta skill generated per task — see Customization #3 for that wiring.
 
-**Key implementation decisions:**
+### How this replaced the polling sidecar
 
-- **Real columns, not JSONB squatting.** Same rationale as customization #1: these are stable concepts, the schema delta is tiny (3 columns, additive), and the UI needs native types for checkboxes and text inputs. JSONB squatting was considered (PROJECT.md §3) and rejected.
-- **No daemon changes.** The sidecar (Phase 5) reads these fields through Multica's public REST API, not through the daemon claim path. The daemon code in `server/internal/daemon/` is untouched — this customization only adds fields that the REST layer exposes.
-- **Update handler uses `pgtype.Bool` for nullable-in-update.** The sqlc `UPDATE` query uses `COALESCE(sqlc.narg('consult_wiki'), consult_wiki)` so omitting the field in a PATCH preserves the previous value. Generated `UpdateIssueParams` types the bools as `pgtype.Bool` even though the column is `NOT NULL` — this is correct; the nullability there is "present-in-update" not "present-in-db".
-- **Create handler defaults.** `CreateIssueRequest` treats the bools as `*bool` for optionality: missing → false, explicit false → false, explicit true → true. Matches the user intent that new issues opt-in to wiki behavior.
+The original commit `b41e0ad5` added a third field, `wiki_query_hint`, and the launcher ran a TypeScript polling sidecar that read all three fields, called memex's HTTP API, and posted marker comments on flagged issues.
 
-**Files touched (10):**
+In 2026-04-12 the launcher retired the sidecar and moved to an on-demand model: agents carry a `memex` skill (installed via Multica's skills UI) and call memex themselves when the per-task meta skill indicates they should. The hint field became redundant — the agent formulates its own query from the issue title and description. Migration 042 dropped the column; Customization #3 wires the two remaining booleans into the per-task meta skill.
+
+See `../../memex/INSTRUCTION.md` for the skill body the user pastes into the Multica UI and `../../PROJECT.md` Phase 8 for the full cleanup.
+
+### Files currently carrying this customization
 
 | File | Change | Hand-edited? |
 |---|---|---|
-| `server/migrations/041_issue_wiki_fields.up.sql` | New — `ALTER TABLE issue ADD COLUMN …` × 3 | ✅ |
-| `server/migrations/041_issue_wiki_fields.down.sql` | New — rollback | ✅ |
-| `server/pkg/db/queries/issue.sql` | Add 3 fields to `CreateIssue`, add 3 narg updates to `UpdateIssue` | ✅ |
+| `server/migrations/041_issue_wiki_fields.up.sql` | Historical — `ALTER TABLE issue ADD COLUMN …` × 3 | ✅ |
+| `server/migrations/041_issue_wiki_fields.down.sql` | Historical rollback | ✅ |
+| `server/migrations/042_drop_wiki_query_hint.up.sql` | Forward drop of the hint column | ✅ |
+| `server/migrations/042_drop_wiki_query_hint.down.sql` | Rollback that re-adds the column (data lost) | ✅ |
+| `server/pkg/db/queries/issue.sql` | `consult_wiki` + `allow_wiki_writes` in `CreateIssue`, `UpdateIssue`, `ListIssues`, `ListOpenIssues` | ✅ |
 | `server/pkg/db/generated/issue.sql.go` | Regenerated by `make sqlc` | ⚙️ |
-| `server/pkg/db/generated/models.go` | Regenerated — adds `ConsultWiki`, `AllowWikiWrites`, `WikiQueryHint` to `db.Issue` | ⚙️ |
-| `server/internal/handler/issue.go` | Thread fields through `IssueResponse`, `CreateIssueRequest`, `UpdateIssueRequest`, and both handlers | ✅ |
-| `packages/core/types/issue.ts` | Add `consult_wiki`, `allow_wiki_writes`, `wiki_query_hint` to `Issue` interface | ✅ |
-| `packages/core/types/api.ts` | Add same fields to `CreateIssueRequest` and `UpdateIssueRequest` | ✅ |
-| `packages/views/modals/create-issue.tsx` | Add compact "wiki metadata strip" (2 checkboxes + 1 text input) between description and property toolbar | ✅ |
-| `packages/views/issues/components/issue-detail.tsx` | Add two `PropRow`s inside the Properties panel: `Wiki` (two checkboxes) and `Hint` (blur-to-commit text input) | ✅ |
+| `server/pkg/db/generated/models.go` | Regenerated — `ConsultWiki` and `AllowWikiWrites` on `db.Issue` | ⚙️ |
+| `server/internal/handler/issue.go` | `IssueResponse`, `CreateIssueRequest`, `UpdateIssueRequest`, and both handlers thread the two booleans | ✅ |
+| `packages/core/types/issue.ts` | Two booleans on `Issue` | ✅ |
+| `packages/core/types/api.ts` | Same on `CreateIssueRequest` and `UpdateIssueRequest` | ✅ |
+| `packages/views/modals/create-issue.tsx` | Compact wiki strip with 2 checkboxes below the description | ✅ |
+| `packages/views/issues/components/issue-detail.tsx` | `Wiki` `PropRow` with 2 checkboxes in the Properties panel | ✅ |
 
-**Hand-edited count: 8.** Under PROJECT.md's ~10-file cap.
+**Hand-edited count: 10** (across both commits combined). Generated files don't count toward the ~10-file cap.
 
-**Upstream conflict risk:**
+### Implementation notes
 
-- `server/pkg/db/queries/issue.sql` — high churn file upstream; any new column upstream adds to `CreateIssue` or `UpdateIssue` will require re-ordering the narg list around mine. `git rerere` should replay once resolved.
-- `server/internal/handler/issue.go` — very active (1380+ lines), high conflict risk. My insertions cluster around the `CreateIssueRequest`, `UpdateIssueRequest`, and the update path's rawFields branching. Upstream occasionally refactors these same sections.
+- **Update handler uses `pgtype.Bool` for nullable-in-update.** The sqlc `UPDATE` query uses `COALESCE(sqlc.narg('consult_wiki'), consult_wiki)` so omitting the field in a PATCH preserves the previous value. Generated `UpdateIssueParams` types the bool as `pgtype.Bool` even though the column is `NOT NULL` — this is correct; the nullability is "present-in-update" not "present-in-db".
+- **Create handler defaults.** `CreateIssueRequest` treats both booleans as `*bool`: missing → false, explicit false → false, explicit true → true.
+- **No daemon changes in THIS customization.** The daemon-side prompt injection that reads the two flags lives in Customization #3 — see that section for the runtime config meta-skill wiring.
+
+### Upstream conflict risk
+
+- `server/pkg/db/queries/issue.sql` — high churn upstream; any new column added to `CreateIssue` or `UpdateIssue` will reorder parameters around mine. `git rerere` should replay the resolution.
+- `server/internal/handler/issue.go` — very active (1300+ lines). Insertions cluster around `CreateIssueRequest`, `UpdateIssueRequest`, and the update path's rawFields branching.
 - `packages/views/modals/create-issue.tsx` — medium risk. Upstream iterates on the create-issue UX.
 - `packages/views/issues/components/issue-detail.tsx` — medium risk. The Properties panel is stable-ish but large.
 - `server/pkg/db/generated/*` — mechanical, just re-run `make sqlc` after conflict resolution.
 
-**Smoke test (Phase 4 sign-off, 2026-04-11):**
-1. Ran migration, confirmed columns exist on `issue` table with correct defaults
-2. Created issue via REST API with `consult_wiki=true`, `allow_wiki_writes=true`, `wiki_query_hint="authentication middleware"` — round-trips cleanly
-3. Updated same issue via PATCH, toggled `consult_wiki` to false, confirmed the other fields preserved
-4. Created issue in the UI with the new wiki strip visible, checked both boxes, typed a hint, saved, confirmed fields persisted
-5. Opened issue detail, toggled checkboxes inline and blur-committed a new hint, confirmed optimistic updates + DB round-trip
+### Smoke test history
+
+- **Phase 4 sign-off, 2026-04-11:** three-field version verified end-to-end with the polling sidecar (REST round-trip, UI create, UI edit, PATCH preservation).
+- **Migration 042 sign-off, 2026-04-12:** sqlc regenerated cleanly; `make up` → create issue with `consult_wiki=true` and `allow_wiki_writes=true` in the UI → PATCH toggling each → list response includes both flags. Hint field absent from UI and API. *(Sign-off pending — to be verified by the user when they next run `make up` against the rebuilt launcher.)*
 
 ---
 

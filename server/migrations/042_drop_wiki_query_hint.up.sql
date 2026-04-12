@@ -1,0 +1,13 @@
+-- customize: drop wiki_query_hint column from issue
+--
+-- The wiki_query_hint field was added in migration 041 to let the Phase 5
+-- polling sidecar bias its memex search away from the issue title. That
+-- sidecar has been retired in favor of Multica's native skills feature:
+-- agents now carry a `memex` skill (installed via the skills UI) and
+-- formulate their own queries from the task context, so the per-issue hint
+-- is dead weight.
+--
+-- consult_wiki and allow_wiki_writes remain — they're the user-facing gates
+-- that tell the agent whether to read/write memex for a given issue, and
+-- they're surfaced to the agent through the runtime config meta skill.
+ALTER TABLE issue DROP COLUMN IF EXISTS wiki_query_hint;

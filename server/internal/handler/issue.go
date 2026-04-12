@@ -38,10 +38,11 @@ type IssueResponse struct {
 	ProjectID          *string                 `json:"project_id"`
 	Position           float64                 `json:"position"`
 	DueDate            *string                 `json:"due_date"`
-	// customize: wiki metadata fields consumed by the sidecar
+	// customize: wiki metadata gates — read by the daemon's meta skill
+	// builder to emit per-task hints telling the agent to use the `memex`
+	// skill. See server/internal/daemon/execenv/runtime_config.go.
 	ConsultWiki        bool                    `json:"consult_wiki"`
 	AllowWikiWrites    bool                    `json:"allow_wiki_writes"`
-	WikiQueryHint      *string                 `json:"wiki_query_hint"`
 	CreatedAt          string                  `json:"created_at"`
 	UpdatedAt          string                  `json:"updated_at"`
 	Reactions          []IssueReactionResponse `json:"reactions,omitempty"`
@@ -69,7 +70,6 @@ func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 		DueDate:         timestampToPtr(i.DueDate),
 		ConsultWiki:     i.ConsultWiki,     // customize
 		AllowWikiWrites: i.AllowWikiWrites, // customize
-		WikiQueryHint:   textToPtr(i.WikiQueryHint), // customize
 		CreatedAt:       timestampToString(i.CreatedAt),
 		UpdatedAt:       timestampToString(i.UpdatedAt),
 	}
@@ -96,7 +96,6 @@ func issueListRowToResponse(i db.ListIssuesRow, issuePrefix string) IssueRespons
 		DueDate:         timestampToPtr(i.DueDate),
 		ConsultWiki:     i.ConsultWiki,     // customize
 		AllowWikiWrites: i.AllowWikiWrites, // customize
-		WikiQueryHint:   textToPtr(i.WikiQueryHint), // customize
 		CreatedAt:       timestampToString(i.CreatedAt),
 		UpdatedAt:       timestampToString(i.UpdatedAt),
 	}
@@ -122,7 +121,6 @@ func openIssueRowToResponse(i db.ListOpenIssuesRow, issuePrefix string) IssueRes
 		DueDate:         timestampToPtr(i.DueDate),
 		ConsultWiki:     i.ConsultWiki,     // customize
 		AllowWikiWrites: i.AllowWikiWrites, // customize
-		WikiQueryHint:   textToPtr(i.WikiQueryHint), // customize
 		CreatedAt:       timestampToString(i.CreatedAt),
 		UpdatedAt:       timestampToString(i.UpdatedAt),
 	}
@@ -744,10 +742,9 @@ type CreateIssueRequest struct {
 	ProjectID          *string  `json:"project_id"`
 	DueDate            *string  `json:"due_date"`
 	AttachmentIDs      []string `json:"attachment_ids,omitempty"`
-	// customize: wiki metadata fields
+	// customize: wiki metadata gates (see IssueResponse for rationale)
 	ConsultWiki        *bool    `json:"consult_wiki"`
 	AllowWikiWrites    *bool    `json:"allow_wiki_writes"`
-	WikiQueryHint      *string  `json:"wiki_query_hint"`
 }
 
 func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
@@ -840,7 +837,7 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	// Determine creator identity: agent (via X-Agent-ID header) or member.
 	creatorType, actualCreatorID := h.resolveActor(r, creatorID, workspaceID)
 
-	// customize: wiki metadata — explicit opt-in, default false, hint optional
+	// customize: wiki metadata — explicit opt-in, default false
 	consultWiki := false
 	if req.ConsultWiki != nil {
 		consultWiki = *req.ConsultWiki
@@ -865,9 +862,8 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		DueDate:            dueDate,
 		Number:             issueNumber,
 		ProjectID:          func() pgtype.UUID { if req.ProjectID != nil { return parseUUID(*req.ProjectID) }; return pgtype.UUID{} }(),
-		ConsultWiki:        consultWiki,          // customize
-		AllowWikiWrites:    allowWikiWrites,      // customize
-		WikiQueryHint:      ptrToText(req.WikiQueryHint), // customize
+		ConsultWiki:        consultWiki,     // customize
+		AllowWikiWrites:    allowWikiWrites, // customize
 	})
 	if err != nil {
 		slog.Warn("create issue failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
@@ -926,10 +922,9 @@ type UpdateIssueRequest struct {
 	DueDate            *string  `json:"due_date"`
 	ParentIssueID      *string  `json:"parent_issue_id"`
 	ProjectID          *string  `json:"project_id"`
-	// customize: wiki metadata fields
+	// customize: wiki metadata gates (see IssueResponse for rationale)
 	ConsultWiki        *bool    `json:"consult_wiki"`
 	AllowWikiWrites    *bool    `json:"allow_wiki_writes"`
-	WikiQueryHint      *string  `json:"wiki_query_hint"`
 }
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -966,8 +961,6 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		DueDate:       prevIssue.DueDate,
 		ParentIssueID: prevIssue.ParentIssueID,
 		ProjectID:     prevIssue.ProjectID,
-		// customize: preserve wiki fields when caller omits them
-		WikiQueryHint: prevIssue.WikiQueryHint,
 	}
 
 	// COALESCE fields — only set when explicitly provided
@@ -1060,13 +1053,6 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AllowWikiWrites != nil {
 		params.AllowWikiWrites = pgtype.Bool{Bool: *req.AllowWikiWrites, Valid: true}
-	}
-	if _, ok := rawFields["wiki_query_hint"]; ok {
-		if req.WikiQueryHint != nil && *req.WikiQueryHint != "" {
-			params.WikiQueryHint = pgtype.Text{String: *req.WikiQueryHint, Valid: true}
-		} else {
-			params.WikiQueryHint = pgtype.Text{Valid: false}
-		}
 	}
 
 	// Enforce agent visibility: private agents can only be assigned by owner/admin.

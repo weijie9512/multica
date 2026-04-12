@@ -1,10 +1,11 @@
 -- name: ListIssues :many
--- customize: wiki fields added so the sidecar can detect consult_wiki
--- candidates in a single list call instead of N+1 fetches
+-- customize: consult_wiki/allow_wiki_writes selected explicitly so the API
+-- exposes them without an N+1 per-issue fetch. (Migration 042 dropped
+-- wiki_query_hint; kept the two boolean gates.)
 SELECT id, workspace_id, title, status, priority,
        assignee_type, assignee_id, creator_type, creator_id,
        parent_issue_id, position, due_date, created_at, updated_at, number, project_id,
-       consult_wiki, allow_wiki_writes, wiki_query_hint
+       consult_wiki, allow_wiki_writes
 FROM issue
 WHERE workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
@@ -28,10 +29,10 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, position, due_date, number, project_id,
-    consult_wiki, allow_wiki_writes, wiki_query_hint
+    consult_wiki, allow_wiki_writes
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-    $15, $16, $17
+    $15, $16
 ) RETURNING *;
 
 -- name: GetIssueByNumber :one
@@ -52,7 +53,6 @@ UPDATE issue SET
     project_id = sqlc.narg('project_id'),
     consult_wiki = COALESCE(sqlc.narg('consult_wiki'), consult_wiki),
     allow_wiki_writes = COALESCE(sqlc.narg('allow_wiki_writes'), allow_wiki_writes),
-    wiki_query_hint = sqlc.narg('wiki_query_hint'),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
@@ -68,11 +68,12 @@ RETURNING *;
 DELETE FROM issue WHERE id = $1;
 
 -- name: ListOpenIssues :many
--- customize: wiki fields added (same rationale as ListIssues)
+-- customize: consult_wiki/allow_wiki_writes selected explicitly (same
+-- rationale as ListIssues; wiki_query_hint dropped in migration 042).
 SELECT id, workspace_id, title, status, priority,
        assignee_type, assignee_id, creator_type, creator_id,
        parent_issue_id, position, due_date, created_at, updated_at, number, project_id,
-       consult_wiki, allow_wiki_writes, wiki_query_hint
+       consult_wiki, allow_wiki_writes
 FROM issue
 WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')

@@ -200,7 +200,6 @@ type Issue struct {
 	ProjectID          pgtype.UUID        `json:"project_id"`
 	ConsultWiki        bool               `json:"consult_wiki"`
 	AllowWikiWrites    bool               `json:"allow_wiki_writes"`
-	WikiQueryHint      pgtype.Text        `json:"wiki_query_hint"`
 }
 
 type IssueDependency struct {

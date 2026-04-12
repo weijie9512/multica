@@ -37,10 +37,9 @@ export interface Issue {
   project_id: string | null;
   position: number;
   due_date: string | null;
-  /** customize: wiki metadata — read by the sidecar to pre-fetch / write-back wiki context */
+  /** customize: wiki metadata gates — surfaced in the agent's meta skill so it uses the `memex` skill on opt-in tasks */
   consult_wiki: boolean;
   allow_wiki_writes: boolean;
-  wiki_query_hint: string | null;
   reactions?: IssueReaction[];
   created_at: string;
   updated_at: string;

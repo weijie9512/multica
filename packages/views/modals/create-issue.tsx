@@ -76,7 +76,6 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
   // customize: wiki metadata (not persisted to draft — ephemeral per-issue flags)
   const [consultWiki, setConsultWiki] = useState(false);
   const [allowWikiWrites, setAllowWikiWrites] = useState(false);
-  const [wikiQueryHint, setWikiQueryHint] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
 
   // File upload — collect attachment IDs so we can link them after issue creation.
@@ -119,7 +118,6 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
         // customize: wiki metadata
         consult_wiki: consultWiki || undefined,
         allow_wiki_writes: allowWikiWrites || undefined,
-        wiki_query_hint: wikiQueryHint.trim() || undefined,
       });
       clearDraft();
       onClose();
@@ -237,7 +235,7 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
           {descDragOver && <FileDropOverlay />}
         </div>
 
-        {/* customize: Wiki metadata strip */}
+        {/* customize: Wiki metadata strip — opt-in gates for the `memex` skill */}
         <div className="flex items-center gap-3 px-5 py-2 shrink-0 border-t border-border/40 text-xs">
           <label className="flex items-center gap-1.5 cursor-pointer select-none text-muted-foreground hover:text-foreground">
             <input
@@ -257,13 +255,6 @@ export function CreateIssueModal({ onClose, data }: { onClose: () => void; data?
             />
             <span>Allow writes</span>
           </label>
-          <input
-            type="text"
-            value={wikiQueryHint}
-            onChange={(e) => setWikiQueryHint(e.target.value)}
-            placeholder="Wiki query hint (optional)"
-            className="flex-1 min-w-0 bg-transparent outline-none placeholder:text-muted-foreground/50"
-          />
         </div>
 
         {/* Property toolbar */}
