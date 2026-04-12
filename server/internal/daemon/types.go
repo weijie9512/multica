@@ -35,6 +35,12 @@ type Task struct {
 	TriggerCommentID string     `json:"trigger_comment_id,omitempty"` // comment that triggered this task
 	ChatSessionID    string     `json:"chat_session_id,omitempty"`    // non-empty for chat tasks
 	ChatMessage      string     `json:"chat_message,omitempty"`       // user message content for chat tasks
+	// customize: memex integration flags set from the issue row by the
+	// claim endpoint. When true, the runtime-config meta skill renders a
+	// per-task "Memex integration" section instructing the agent to use
+	// the `memex` skill for reads / writes.
+	ConsultWiki     bool `json:"consult_wiki,omitempty"`
+	AllowWikiWrites bool `json:"allow_wiki_writes,omitempty"`
 }
 
 // AgentData holds agent details returned by the claim endpoint.

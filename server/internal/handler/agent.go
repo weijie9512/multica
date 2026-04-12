@@ -93,6 +93,12 @@ type AgentTaskResponse struct {
 	TriggerCommentID *string        `json:"trigger_comment_id,omitempty"` // comment that triggered this task
 	ChatSessionID    string         `json:"chat_session_id,omitempty"`    // non-empty for chat tasks
 	ChatMessage      string         `json:"chat_message,omitempty"`       // user message for chat tasks
+	// customize: per-issue gates telling the agent to use the `memex` skill
+	// to read/write the knowledge base. Populated by ClaimTaskByRuntime from
+	// the issue row when the task is claimed. Rendered into CLAUDE.md /
+	// AGENTS.md by the daemon's runtime-config meta skill builder.
+	ConsultWiki     bool `json:"consult_wiki,omitempty"`
+	AllowWikiWrites bool `json:"allow_wiki_writes,omitempty"`
 }
 
 // TaskAgentData holds agent info included in claim responses so the daemon

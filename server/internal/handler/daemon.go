@@ -389,6 +389,11 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 					projectWorkDir = project.WorkingDir.String
 				}
 			}
+			// customize: propagate memex integration flags from the issue to
+			// the daemon so the runtime-config meta skill can render per-task
+			// hints telling the agent to use the `memex` skill.
+			resp.ConsultWiki = issue.ConsultWiki
+			resp.AllowWikiWrites = issue.AllowWikiWrites
 		}
 
 		// Look up the prior session for this (agent, issue) pair so the daemon

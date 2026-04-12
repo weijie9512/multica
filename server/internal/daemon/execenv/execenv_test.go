@@ -439,6 +439,88 @@ func TestInjectRuntimeConfigNoSkills(t *testing.T) {
 	if strings.Contains(s, "## Skills") {
 		t.Error("should not have Skills section when there are no skills")
 	}
+	// customize: default flags should NOT render the memex section.
+	if strings.Contains(s, "## Memex integration") {
+		t.Error("should not have Memex integration section when neither flag is set")
+	}
+}
+
+// customize: TestInjectRuntimeConfigMemexHints verifies the per-task memex
+// integration hints get rendered when the claim endpoint sets the flags.
+// These flags come from the issue row (consult_wiki / allow_wiki_writes);
+// they're the user-facing gate for whether the agent should use the
+// `memex` skill on a given task.
+func TestInjectRuntimeConfigMemexHints(t *testing.T) {
+	t.Parallel()
+
+	t.Run("both flags set renders both bullets", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		ctx := TaskContextForEnv{
+			IssueID:         "memex-both-flags",
+			ConsultWiki:     true,
+			AllowWikiWrites: true,
+		}
+		if err := InjectRuntimeConfig(dir, "claude", ctx); err != nil {
+			t.Fatalf("InjectRuntimeConfig failed: %v", err)
+		}
+		content, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+		if err != nil {
+			t.Fatalf("read CLAUDE.md: %v", err)
+		}
+		s := string(content)
+		for _, want := range []string{
+			"## Memex integration",
+			"consult_wiki is ENABLED",
+			"allow_wiki_writes is ENABLED",
+			"`memex` skill",
+		} {
+			if !strings.Contains(s, want) {
+				t.Errorf("CLAUDE.md missing %q", want)
+			}
+		}
+	})
+
+	t.Run("consult only omits write bullet", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		ctx := TaskContextForEnv{
+			IssueID:     "memex-consult-only",
+			ConsultWiki: true,
+		}
+		if err := InjectRuntimeConfig(dir, "claude", ctx); err != nil {
+			t.Fatalf("InjectRuntimeConfig failed: %v", err)
+		}
+		content, _ := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+		s := string(content)
+		if !strings.Contains(s, "consult_wiki is ENABLED") {
+			t.Error("should contain consult_wiki bullet")
+		}
+		if strings.Contains(s, "allow_wiki_writes is ENABLED") {
+			t.Error("should NOT contain allow_wiki_writes bullet when flag is false")
+		}
+	})
+
+	t.Run("writes only omits consult bullet", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		ctx := TaskContextForEnv{
+			IssueID:         "memex-writes-only",
+			AllowWikiWrites: true,
+		}
+		if err := InjectRuntimeConfig(dir, "codex", ctx); err != nil {
+			t.Fatalf("InjectRuntimeConfig failed: %v", err)
+		}
+		// Codex uses AGENTS.md instead of CLAUDE.md.
+		content, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+		s := string(content)
+		if strings.Contains(s, "consult_wiki is ENABLED") {
+			t.Error("should NOT contain consult_wiki bullet when flag is false")
+		}
+		if !strings.Contains(s, "allow_wiki_writes is ENABLED") {
+			t.Error("should contain allow_wiki_writes bullet")
+		}
+	})
 }
 
 func TestWriteContextFilesOpencodeNativeSkills(t *testing.T) {
