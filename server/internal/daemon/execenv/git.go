@@ -1,6 +1,7 @@
 package execenv
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,9 +12,9 @@ import (
 	"time"
 )
 
-// detectGitRepo checks if dir is inside a git repository (regular or bare).
+// DetectGitRepo checks if dir is inside a git repository (regular or bare).
 // Returns the git root path and true if found.
-func detectGitRepo(dir string) (string, bool) {
+func DetectGitRepo(dir string) (string, bool) {
 	// Try regular repo first.
 	cmd := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel")
 	if out, err := cmd.Output(); err == nil {
@@ -29,8 +30,8 @@ func detectGitRepo(dir string) (string, bool) {
 	return "", false
 }
 
-// fetchOrigin runs `git fetch origin` to ensure the local repo has the latest remote refs.
-func fetchOrigin(gitRoot string) error {
+// FetchOrigin runs `git fetch origin` to ensure the local repo has the latest remote refs.
+func FetchOrigin(gitRoot string) error {
 	cmd := exec.Command("git", "-C", gitRoot, "fetch", "origin")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git fetch origin: %s: %w", strings.TrimSpace(string(out)), err)
@@ -38,9 +39,9 @@ func fetchOrigin(gitRoot string) error {
 	return nil
 }
 
-// getRemoteDefaultBranch returns "origin/<branch>" for the remote's default branch.
+// GetRemoteDefaultBranch returns "origin/<branch>" for the remote's default branch.
 // Falls back to "origin/main", then "HEAD".
-func getRemoteDefaultBranch(gitRoot string) string {
+func GetRemoteDefaultBranch(gitRoot string) string {
 	// Try symbolic-ref of origin/HEAD (set by `git clone` or `git remote set-head`).
 	cmd := exec.Command("git", "-C", gitRoot, "symbolic-ref", "refs/remotes/origin/HEAD")
 	if out, err := cmd.Output(); err == nil {
@@ -67,8 +68,8 @@ func getRemoteDefaultBranch(gitRoot string) string {
 	return "HEAD"
 }
 
-// setupGitWorktree creates a git worktree at worktreePath with a new branch.
-func setupGitWorktree(gitRoot, worktreePath, branchName, baseRef string) error {
+// SetupGitWorktree creates a git worktree at worktreePath with a new branch.
+func SetupGitWorktree(gitRoot, worktreePath, branchName, baseRef string) error {
 	// Remove the workdir created by caller — git worktree add needs to create it.
 	if err := os.Remove(worktreePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove placeholder workdir: %w", err)
@@ -108,8 +109,8 @@ func removeGitWorktree(gitRoot, worktreePath, branchName string, logger *slog.Lo
 	}
 }
 
-// excludeFromGit adds a pattern to the worktree's .git/info/exclude file.
-func excludeFromGit(worktreePath, pattern string) error {
+// ExcludeFromGit adds a pattern to the worktree's .git/info/exclude file.
+func ExcludeFromGit(worktreePath, pattern string) error {
 	// Resolve the actual git dir for this worktree.
 	cmd := exec.Command("git", "-C", worktreePath, "rev-parse", "--git-dir")
 	out, err := cmd.Output()
@@ -173,8 +174,8 @@ func repoNameFromURL(url string) string {
 	return name
 }
 
-// shortID returns the first 8 characters of a UUID string (dashes stripped).
-func shortID(uuid string) string {
+// ShortID returns the first 8 characters of a UUID string (dashes stripped).
+func ShortID(uuid string) string {
 	s := strings.ReplaceAll(uuid, "-", "")
 	if len(s) > 8 {
 		return s[:8]
@@ -182,10 +183,39 @@ func shortID(uuid string) string {
 	return s
 }
 
+// IsGitURL returns true if s looks like a remote git URL (https:// or git@).
+func IsGitURL(s string) bool {
+	return strings.HasPrefix(s, "https://") ||
+		strings.HasPrefix(s, "http://") ||
+		strings.HasPrefix(s, "git@") ||
+		strings.HasPrefix(s, "ssh://") ||
+		strings.HasPrefix(s, "git://")
+}
+
+// DetectPR checks if a pull request exists for the given branch using `gh pr list`.
+// Returns the PR URL if found, empty string otherwise. Best-effort: logs and returns
+// empty on any error (gh not installed, not a GitHub repo, etc.).
+func DetectPR(workDir, branchName string, logger *slog.Logger) string {
+	cmd := exec.Command("gh", "pr", "list", "--head", branchName, "--json", "url", "--limit", "1")
+	cmd.Dir = workDir
+	out, err := cmd.Output()
+	if err != nil {
+		logger.Debug("DetectPR: gh pr list failed (non-fatal)", "branch", branchName, "error", err)
+		return ""
+	}
+	var prs []struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(out, &prs); err != nil || len(prs) == 0 {
+		return ""
+	}
+	return prs[0].URL
+}
+
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
 
-// sanitizeName produces a git-branch-safe name from a human-readable string.
-func sanitizeName(name string) string {
+// SanitizeName produces a git-branch-safe name from a human-readable string.
+func SanitizeName(name string) string {
 	s := strings.ToLower(strings.TrimSpace(name))
 	s = nonAlphanumeric.ReplaceAllString(s, "-")
 	s = strings.Trim(s, "-")

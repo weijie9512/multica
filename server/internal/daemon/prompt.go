@@ -17,6 +17,19 @@ func BuildPrompt(task Task) string {
 	fmt.Fprintf(&b, "Your assigned issue ID is: %s\n\n", task.IssueID)
 	fmt.Fprintf(&b, "Start by running `multica issue get %s --output json` to understand your task, then complete it.\n", task.IssueID)
 
+	// customize: per-task worktree branch hint. Tells the agent which branch
+	// it's on so it can push and open a draft PR.
+	if task.WorktreeBranch != "" {
+		b.WriteString("\n## Git worktree\n\n")
+		fmt.Fprintf(&b, "You are working in an isolated git worktree on branch `%s`.\n", task.WorktreeBranch)
+		b.WriteString("When your work is complete:\n")
+		b.WriteString("1. Commit your changes\n")
+		fmt.Fprintf(&b, "2. Push the branch: `git push origin %s`\n", task.WorktreeBranch)
+		b.WriteString("3. Open a **draft** pull request against the default branch\n")
+		b.WriteString("4. Post the PR link as a comment on the issue\n")
+		b.WriteString("Do NOT push directly to the default branch.\n")
+	}
+
 	// customize: per-task memex integration hints. These live in the prompt
 	// (not in CLAUDE.md) because the flags vary per issue — writing them to
 	// CLAUDE.md would leave stale state when the workdir is reused across

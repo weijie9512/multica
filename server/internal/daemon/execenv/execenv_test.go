@@ -23,8 +23,8 @@ func TestShortID(t *testing.T) {
 		{"a1b2c3d4e5f67890", "a1b2c3d4"},
 	}
 	for _, tt := range tests {
-		if got := shortID(tt.input); got != tt.want {
-			t.Errorf("shortID(%q) = %q, want %q", tt.input, got, tt.want)
+		if got := ShortID(tt.input); got != tt.want {
+			t.Errorf("ShortID(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
@@ -44,8 +44,8 @@ func TestSanitizeName(t *testing.T) {
 		{"日本語テスト", "agent"},
 	}
 	for _, tt := range tests {
-		if got := sanitizeName(tt.input); got != tt.want {
-			t.Errorf("sanitizeName(%q) = %q, want %q", tt.input, got, tt.want)
+		if got := SanitizeName(tt.input); got != tt.want {
+			t.Errorf("SanitizeName(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

@@ -41,6 +41,9 @@ type Task struct {
 	// the `memex` skill for reads / writes.
 	ConsultWiki     bool `json:"consult_wiki,omitempty"`
 	AllowWikiWrites bool `json:"allow_wiki_writes,omitempty"`
+	// customize: set by the daemon when a worktree is created for this task.
+	// BuildPrompt uses it to tell the agent which branch it's on.
+	WorktreeBranch string `json:"worktree_branch,omitempty"`
 }
 
 // AgentData holds agent details returned by the claim endpoint.
@@ -79,6 +82,7 @@ type TaskResult struct {
 	Status     string           `json:"status"`
 	Comment    string           `json:"comment"`
 	BranchName string           `json:"branch_name,omitempty"`
+	PRURL      string           `json:"pr_url,omitempty"` // customize: detected PR URL after agent completion
 	EnvType    string           `json:"env_type,omitempty"`
 	SessionID  string           `json:"session_id,omitempty"` // Claude session ID for future resumption
 	WorkDir    string           `json:"work_dir,omitempty"`   // working directory used during execution

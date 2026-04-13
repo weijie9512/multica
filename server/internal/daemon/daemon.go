@@ -863,7 +863,7 @@ func (d *Daemon) handleTask(ctx context.Context, task Task) {
 		}
 	default:
 		taskLog.Info("task completed", "status", result.Status)
-		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.SessionID, result.WorkDir); err != nil {
+		if err := d.client.CompleteTask(ctx, task.ID, result.Comment, result.BranchName, result.PRURL, result.SessionID, result.WorkDir); err != nil {
 			taskLog.Error("complete task failed, falling back to fail", "error", err)
 			if failErr := d.client.FailTask(ctx, task.ID, fmt.Sprintf("complete task failed: %s", err.Error())); failErr != nil {
 				taskLog.Error("fail task fallback also failed", "error", failErr)
@@ -902,9 +902,73 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 
 	// Try to reuse the workdir from a previous task on the same (agent, issue) pair.
 	var env *execenv.Environment
-	if task.PriorWorkDir != "" {
+	var worktreeBranch string // customize: populated when a worktree is created
+
+	if task.PriorWorkDir != "" && execenv.IsGitURL(task.PriorWorkDir) {
+		// customize: remote URL — use the repo cache to clone + create worktree automatically.
+		if d.repoCache != nil {
+			d.repoCache.Sync(task.WorkspaceID, []repocache.RepoInfo{{URL: task.PriorWorkDir}})
+			// Prepare a fresh isolated dir to host the worktree.
+			var err error
+			env, err = execenv.Prepare(execenv.PrepareParams{
+				WorkspacesRoot: d.cfg.WorkspacesRoot,
+				WorkspaceID:    task.WorkspaceID,
+				TaskID:         task.ID,
+				AgentName:      agentName,
+				Provider:       provider,
+				Task:           taskCtx,
+			}, d.logger)
+			if err != nil {
+				return TaskResult{}, fmt.Errorf("prepare execution environment: %w", err)
+			}
+			wtResult, err := d.repoCache.CreateWorktree(repocache.WorktreeParams{
+				WorkspaceID: task.WorkspaceID,
+				RepoURL:     task.PriorWorkDir,
+				WorkDir:     env.WorkDir,
+				AgentName:   agentName,
+				TaskID:      task.ID,
+			})
+			if err != nil {
+				d.logger.Warn("worktree from remote URL failed, agent will use empty workdir", "url", task.PriorWorkDir, "error", err)
+			} else {
+				env.WorkDir = wtResult.Path
+				worktreeBranch = wtResult.BranchName
+				d.logger.Info("created worktree from remote URL", "url", task.PriorWorkDir, "branch", worktreeBranch, "path", env.WorkDir)
+			}
+		}
+	} else if task.PriorWorkDir != "" {
 		env = execenv.Reuse(task.PriorWorkDir, provider, taskCtx, d.logger)
+
+		// customize: if the reused workdir is a local git repo, create a
+		// worktree so the agent works on an isolated branch instead of the
+		// user's current checkout.
+		if env != nil {
+			if gitRoot, ok := execenv.DetectGitRepo(env.WorkDir); ok {
+				branchName := fmt.Sprintf("agent/%s/%s", execenv.SanitizeName(agentName), execenv.ShortID(task.ID))
+				worktreeDir := filepath.Join(d.cfg.WorkspacesRoot, task.WorkspaceID, "worktrees", execenv.ShortID(task.ID))
+				if err := os.MkdirAll(worktreeDir, 0o755); err != nil {
+					d.logger.Warn("failed to create worktree parent dir", "error", err)
+				} else {
+					_ = execenv.FetchOrigin(gitRoot)
+					baseRef := execenv.GetRemoteDefaultBranch(gitRoot)
+					if baseRef == "" {
+						baseRef = "HEAD"
+					}
+					if err := execenv.SetupGitWorktree(gitRoot, worktreeDir, branchName, baseRef); err != nil {
+						d.logger.Warn("worktree creation failed, agent will use main checkout", "error", err)
+					} else {
+						for _, pattern := range []string{".agent_context", "CLAUDE.md", "AGENTS.md", ".claude", ".config/opencode"} {
+							_ = execenv.ExcludeFromGit(worktreeDir, pattern)
+						}
+						env.WorkDir = worktreeDir
+						worktreeBranch = branchName
+						d.logger.Info("created worktree from local repo", "gitRoot", gitRoot, "branch", branchName, "path", worktreeDir)
+					}
+				}
+			}
+		}
 	}
+
 	if env == nil {
 		var err error
 		env, err = execenv.Prepare(execenv.PrepareParams{
@@ -918,6 +982,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		if err != nil {
 			return TaskResult{}, fmt.Errorf("prepare execution environment: %w", err)
 		}
+	}
+
+	// customize: pass worktree branch to the task so BuildPrompt can reference it.
+	if worktreeBranch != "" {
+		task.WorktreeBranch = worktreeBranch
 	}
 
 	// Inject runtime-specific config (meta skill) so the agent discovers .agent_context/.
@@ -1141,17 +1210,25 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		})
 	}
 
+	// customize: detect PR if agent worked in a worktree.
+	var detectedPRURL string
+	if worktreeBranch != "" {
+		detectedPRURL = execenv.DetectPR(env.WorkDir, worktreeBranch, d.logger)
+	}
+
 	switch result.Status {
 	case "completed":
 		if result.Output == "" {
 			return TaskResult{}, fmt.Errorf("%s returned empty output", provider)
 		}
 		return TaskResult{
-			Status:    "completed",
-			Comment:   result.Output,
-			SessionID: result.SessionID,
-			WorkDir:   env.WorkDir,
-			Usage:     usageEntries,
+			Status:     "completed",
+			Comment:    result.Output,
+			BranchName: worktreeBranch,
+			PRURL:      detectedPRURL,
+			SessionID:  result.SessionID,
+			WorkDir:    env.WorkDir,
+			Usage:      usageEntries,
 		}, nil
 	case "timeout":
 		return TaskResult{}, fmt.Errorf("%s timed out after %s", provider, d.cfg.AgentTimeout)
@@ -1160,7 +1237,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, taskLo
 		if errMsg == "" {
 			errMsg = fmt.Sprintf("%s execution %s", provider, result.Status)
 		}
-		return TaskResult{Status: "blocked", Comment: errMsg, Usage: usageEntries}, nil
+		return TaskResult{Status: "blocked", Comment: errMsg, BranchName: worktreeBranch, Usage: usageEntries}, nil
 	}
 }
 
