@@ -260,6 +260,27 @@ working_dir (local path or remote URL)
 
 ---
 
+## 6. Fix Codex skill discovery on workdir reuse
+
+**Issue this solves:** When the daemon reuses an existing workdir (the `Reuse` path — which is the common case for subsequent task runs on the same agent+issue pair), Codex agents couldn't see their assigned skills. The `Reuse` function never set `env.CodexHome` and never wrote skills to the codex-home directory. Since `writeContextFiles` intentionally skips Codex skills (they live in CODEX_HOME, not workdir), the skills were silently lost on every reuse.
+
+Claude agents were unaffected — their skills are written to `{workDir}/.claude/skills/` by `writeContextFiles`, which runs on both `Prepare` and `Reuse` paths.
+
+**Scope:** One-file fix. `Reuse` now mirrors `Prepare`'s Codex handling: sets up codex-home, writes skills there, and sets `env.CodexHome` so the daemon passes `CODEX_HOME` to the spawned agent.
+
+**Files touched:**
+
+| File | Change | Hand-edited? |
+|---|---|---|
+| `server/internal/daemon/execenv/execenv.go` | Add Codex codex-home setup + skill writing to `Reuse` | ✅ |
+| `CUSTOMIZATIONS.md` | This section | ✅ |
+
+**Hand-edited count: 2.** Well under the 10-file cap.
+
+**Upstream conflict risk:** Low. The `Reuse` function is small and stable.
+
+---
+
 ## Future customizations
 
 When adding the next one, append a new numbered section above this line. One commit per feature on the `customize` branch per PROJECT.md §3. Hard cap: 10 files per feature.

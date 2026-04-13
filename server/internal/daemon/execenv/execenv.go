@@ -140,6 +140,23 @@ func Reuse(workDir, provider string, task TaskContextForEnv, logger *slog.Logger
 		logger.Warn("execenv: refresh context files failed", "error", err)
 	}
 
+	// For Codex, restore CodexHome and refresh skills there.
+	// writeContextFiles skips Codex skills (they live in CODEX_HOME, not workdir),
+	// so we must handle them explicitly here — same as Prepare does.
+	if provider == "codex" {
+		codexHome := filepath.Join(env.RootDir, "codex-home")
+		if err := prepareCodexHome(codexHome, logger); err != nil {
+			logger.Warn("execenv: refresh codex-home failed", "error", err)
+		} else {
+			if len(task.AgentSkills) > 0 {
+				if err := writeSkillFiles(filepath.Join(codexHome, "skills"), task.AgentSkills); err != nil {
+					logger.Warn("execenv: refresh codex skills failed", "error", err)
+				}
+			}
+			env.CodexHome = codexHome
+		}
+	}
+
 	logger.Info("execenv: reusing env", "workdir", workDir)
 	return env
 }
