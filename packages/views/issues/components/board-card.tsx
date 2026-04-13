@@ -7,7 +7,7 @@ import type { AnimateLayoutChanges } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import type { Issue, UpdateIssueRequest } from "@multica/core/types";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, GitBranch, GitPullRequest } from "lucide-react";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
 import { PriorityIcon } from "./priority-icon";
@@ -22,6 +22,12 @@ function formatDate(date: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+/** Extract PR number from a GitHub/GitLab PR URL, e.g. ".../pull/42" → "42" */
+function prNumberFromURL(url: string): string | undefined {
+  const match = url.match(/\/pull\/(\d+)/);
+  return match?.[1];
 }
 
 /** Stops event from bubbling to Link/drag handlers */
@@ -91,6 +97,31 @@ export const BoardCardContent = memo(function BoardCardContent({
           {issue.description}
         </p>
       )}
+
+      {/* customize: Branch/PR badge */}
+      {issue.pr_url ? (
+        <div className="mt-1.5">
+          <a
+            href={issue.pr_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[11px] font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition-colors"
+          >
+            <GitPullRequest className="size-3" />
+            {prNumberFromURL(issue.pr_url)
+              ? `PR #${prNumberFromURL(issue.pr_url)}`
+              : "PR"}
+          </a>
+        </div>
+      ) : issue.branch_name ? (
+        <div className="mt-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground max-w-full">
+            <GitBranch className="size-3 shrink-0" />
+            <span className="truncate">{issue.branch_name}</span>
+          </span>
+        </div>
+      ) : null}
 
       {/* Row 3: Assignee, priority badge, due date */}
       {(showAssignee || showPriority || showDueDate) && (

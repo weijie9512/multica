@@ -33,6 +33,9 @@ export interface UpdateIssueRequest {
   /** customize: wiki metadata gates */
   consult_wiki?: boolean;
   allow_wiki_writes?: boolean;
+  /** customize: branch/PR metadata */
+  branch_name?: string;
+  pr_url?: string;
 }
 
 export interface ListIssuesParams {

@@ -40,6 +40,9 @@ export interface Issue {
   /** customize: wiki metadata gates — surfaced in the agent's meta skill so it uses the `memex` skill on opt-in tasks */
   consult_wiki: boolean;
   allow_wiki_writes: boolean;
+  /** customize: branch/PR metadata — populated by the daemon when an agent works in a git worktree */
+  branch_name: string | null;
+  pr_url: string | null;
   reactions?: IssueReaction[];
   created_at: string;
   updated_at: string;

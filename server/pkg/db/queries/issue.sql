@@ -5,7 +5,8 @@
 SELECT id, workspace_id, title, status, priority,
        assignee_type, assignee_id, creator_type, creator_id,
        parent_issue_id, position, due_date, created_at, updated_at, number, project_id,
-       consult_wiki, allow_wiki_writes
+       consult_wiki, allow_wiki_writes,
+       branch_name, pr_url
 FROM issue
 WHERE workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
@@ -53,6 +54,8 @@ UPDATE issue SET
     project_id = sqlc.narg('project_id'),
     consult_wiki = COALESCE(sqlc.narg('consult_wiki'), consult_wiki),
     allow_wiki_writes = COALESCE(sqlc.narg('allow_wiki_writes'), allow_wiki_writes),
+    branch_name = COALESCE(sqlc.narg('branch_name'), branch_name),
+    pr_url = COALESCE(sqlc.narg('pr_url'), pr_url),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
@@ -73,7 +76,8 @@ DELETE FROM issue WHERE id = $1;
 SELECT id, workspace_id, title, status, priority,
        assignee_type, assignee_id, creator_type, creator_id,
        parent_issue_id, position, due_date, created_at, updated_at, number, project_id,
-       consult_wiki, allow_wiki_writes
+       consult_wiki, allow_wiki_writes,
+       branch_name, pr_url
 FROM issue
 WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')
@@ -110,5 +114,15 @@ WHERE workspace_id = $1
   AND assignee_type IS NOT NULL
   AND assignee_id IS NOT NULL
 GROUP BY assignee_type, assignee_id;
+
+-- name: UpdateIssueBranchPR :one
+-- customize: dedicated query for the daemon to set branch_name/pr_url on an
+-- issue after task completion, without touching other fields.
+UPDATE issue SET
+    branch_name = COALESCE(sqlc.narg('branch_name'), branch_name),
+    pr_url = COALESCE(sqlc.narg('pr_url'), pr_url),
+    updated_at = now()
+WHERE id = $1
+RETURNING *;
 
 -- SearchIssues: moved to handler (dynamic SQL for multi-word search support).

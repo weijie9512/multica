@@ -200,6 +200,8 @@ type Issue struct {
 	ProjectID          pgtype.UUID        `json:"project_id"`
 	ConsultWiki        bool               `json:"consult_wiki"`
 	AllowWikiWrites    bool               `json:"allow_wiki_writes"`
+	BranchName         pgtype.Text        `json:"branch_name"`
+	PrUrl              pgtype.Text        `json:"pr_url"`
 }
 
 type IssueDependency struct {

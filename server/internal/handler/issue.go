@@ -43,6 +43,10 @@ type IssueResponse struct {
 	// skill. See server/internal/daemon/execenv/runtime_config.go.
 	ConsultWiki        bool                    `json:"consult_wiki"`
 	AllowWikiWrites    bool                    `json:"allow_wiki_writes"`
+	// customize: branch/PR metadata — populated by the daemon when an agent
+	// works in a git worktree and/or opens a pull request.
+	BranchName         *string                 `json:"branch_name"`
+	PRURL              *string                 `json:"pr_url"`
 	CreatedAt          string                  `json:"created_at"`
 	UpdatedAt          string                  `json:"updated_at"`
 	Reactions          []IssueReactionResponse `json:"reactions,omitempty"`
@@ -70,6 +74,8 @@ func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 		DueDate:         timestampToPtr(i.DueDate),
 		ConsultWiki:     i.ConsultWiki,     // customize
 		AllowWikiWrites: i.AllowWikiWrites, // customize
+		BranchName:      textToPtr(i.BranchName),  // customize
+		PRURL:           textToPtr(i.PrUrl),        // customize
 		CreatedAt:       timestampToString(i.CreatedAt),
 		UpdatedAt:       timestampToString(i.UpdatedAt),
 	}
@@ -96,6 +102,8 @@ func issueListRowToResponse(i db.ListIssuesRow, issuePrefix string) IssueRespons
 		DueDate:         timestampToPtr(i.DueDate),
 		ConsultWiki:     i.ConsultWiki,     // customize
 		AllowWikiWrites: i.AllowWikiWrites, // customize
+		BranchName:      textToPtr(i.BranchName),  // customize
+		PRURL:           textToPtr(i.PrUrl),        // customize
 		CreatedAt:       timestampToString(i.CreatedAt),
 		UpdatedAt:       timestampToString(i.UpdatedAt),
 	}
@@ -121,6 +129,8 @@ func openIssueRowToResponse(i db.ListOpenIssuesRow, issuePrefix string) IssueRes
 		DueDate:         timestampToPtr(i.DueDate),
 		ConsultWiki:     i.ConsultWiki,     // customize
 		AllowWikiWrites: i.AllowWikiWrites, // customize
+		BranchName:      textToPtr(i.BranchName),  // customize
+		PRURL:           textToPtr(i.PrUrl),        // customize
 		CreatedAt:       timestampToString(i.CreatedAt),
 		UpdatedAt:       timestampToString(i.UpdatedAt),
 	}
@@ -925,6 +935,9 @@ type UpdateIssueRequest struct {
 	// customize: wiki metadata gates (see IssueResponse for rationale)
 	ConsultWiki        *bool    `json:"consult_wiki"`
 	AllowWikiWrites    *bool    `json:"allow_wiki_writes"`
+	// customize: branch/PR metadata
+	BranchName         *string  `json:"branch_name"`
+	PRURL              *string  `json:"pr_url"`
 }
 
 func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -1053,6 +1066,13 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AllowWikiWrites != nil {
 		params.AllowWikiWrites = pgtype.Bool{Bool: *req.AllowWikiWrites, Valid: true}
+	}
+	// customize: branch/PR metadata updates
+	if req.BranchName != nil {
+		params.BranchName = pgtype.Text{String: *req.BranchName, Valid: true}
+	}
+	if req.PRURL != nil {
+		params.PrUrl = pgtype.Text{String: *req.PRURL, Valid: true}
 	}
 
 	// Enforce agent visibility: private agents can only be assigned by owner/admin.

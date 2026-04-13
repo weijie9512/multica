@@ -533,10 +533,11 @@ func (h *Handler) ReportTaskProgress(w http.ResponseWriter, r *http.Request) {
 
 // CompleteTask marks a running task as completed.
 type TaskCompleteRequest struct {
-	PRURL     string `json:"pr_url"`
-	Output    string `json:"output"`
-	SessionID string `json:"session_id"` // Claude session ID for future resumption
-	WorkDir   string `json:"work_dir"`   // working directory used during execution
+	PRURL      string `json:"pr_url"`
+	BranchName string `json:"branch_name"` // customize: git branch used during execution
+	Output     string `json:"output"`
+	SessionID  string `json:"session_id"` // Claude session ID for future resumption
+	WorkDir    string `json:"work_dir"`   // working directory used during execution
 }
 
 func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
@@ -562,6 +563,23 @@ func (h *Handler) CompleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("task completed", "task_id", taskID, "agent_id", uuidToString(task.AgentID))
+
+	// customize: persist branch/PR metadata on the issue for board visibility.
+	if task.IssueID.Valid && (req.BranchName != "" || req.PRURL != "") {
+		params := db.UpdateIssueBranchPRParams{
+			ID: task.IssueID,
+		}
+		if req.BranchName != "" {
+			params.BranchName = pgtype.Text{String: req.BranchName, Valid: true}
+		}
+		if req.PRURL != "" {
+			params.PrUrl = pgtype.Text{String: req.PRURL, Valid: true}
+		}
+		if _, err := h.Queries.UpdateIssueBranchPR(r.Context(), params); err != nil {
+			slog.Warn("failed to update issue branch/PR", "task_id", taskID, "error", err)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, taskToResponse(*task))
 }
 

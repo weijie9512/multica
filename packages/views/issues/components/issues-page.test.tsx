@@ -262,6 +262,10 @@ const issueDefaults = {
   parent_issue_id: null,
   project_id: null,
   position: 0,
+  consult_wiki: false,
+  allow_wiki_writes: false,
+  branch_name: null,
+  pr_url: null,
 };
 
 const mockIssues: Issue[] = [

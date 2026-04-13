@@ -9,6 +9,9 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
+  GitBranch,
+  GitPullRequest,
   Link2,
   MoreHorizontal,
   PanelRight,
@@ -1247,6 +1250,34 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   <span>writes</span>
                 </label>
               </PropRow>
+
+              {/* customize: Branch/PR metadata — populated by the daemon */}
+              {(issue.branch_name || issue.pr_url) && (
+                <>
+                  {issue.branch_name && (
+                    <PropRow label="Branch">
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground max-w-[200px]">
+                        <GitBranch className="size-3 shrink-0" />
+                        <span className="truncate font-mono">{issue.branch_name}</span>
+                      </span>
+                    </PropRow>
+                  )}
+                  {issue.pr_url && (
+                    <PropRow label="PR">
+                      <a
+                        href={issue.pr_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"
+                      >
+                        <GitPullRequest className="size-3 shrink-0" />
+                        <span>{issue.pr_url.match(/\/pull\/(\d+)/)?.[0] ?? "View PR"}</span>
+                        <ExternalLink className="size-2.5" />
+                      </a>
+                    </PropRow>
+                  )}
+                </>
+              )}
             </div>}
           </div>
 
